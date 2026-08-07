@@ -48,15 +48,31 @@ const startBlockedReason = computed(() => {
   return null
 })
 
-onMounted(() => {
-  if (room.membership?.code === code.value && room.view) return
-  if (!room.resume(code.value)) {
+/**
+ * Meldet den Raum beim Store an. Zurück zum Einstieg geht es ausschließlich
+ * bei `idle` – also wenn überhaupt keine Zugangsdaten für diesen Code
+ * vorliegen. Eine noch ausstehende erste RoomView ist ein Ladezustand: der
+ * frisch erstellte Raum darf deshalb nicht mehr als ungültig gelten.
+ */
+function open(target: string) {
+  if (room.ensure(target) === 'idle') {
     // Ohne bekanntes Rejoin-Token gibt es keinen Zugang – Raumcode allein reicht nicht.
-    void router.replace({ name: 'whoami-entry', query: { code: code.value } })
+    void router.replace({ name: 'whoami-entry', query: { code: target } })
   }
+}
+
+onMounted(() => open(code.value))
+
+// Ein Deep Link auf einen anderen Raum verwendet dieselbe Komponenteninstanz;
+// ohne diesen Wechsel bliebe die alte Sitzung stehen.
+watch(code, (next, previous) => {
+  if (previous) room.release(previous)
+  open(next)
 })
 
-onBeforeUnmount(() => room.detach())
+// Nur den Sync dieses Raums freigeben: gehört er beim Verlassen der Route
+// bereits zur nächsten Ansicht, bleibt er unangetastet.
+onBeforeUnmount(() => room.release(code.value))
 
 // Sobald der Server einen Begriff kennt, spiegelt ihn das Eingabefeld.
 watch(
@@ -243,7 +259,8 @@ async function closeRoom() {
       </template>
     </template>
 
-    <p v-else-if="!room.fatalError" class="room__loading">{{ t('common.loading') }}</p>
+    <!-- Legitimer Ladezustand: Mitgliedschaft steht, die erste RoomView fehlt noch. -->
+    <p v-else-if="room.status === 'loading'" class="room__loading">{{ t('common.loading') }}</p>
 
     <AppButton
       v-if="room.fatalError"
