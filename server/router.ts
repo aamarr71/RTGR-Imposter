@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { ApiFailure, fail, toResponse } from './errors.js'
 import {
   clientIp,
-  MalformedJson,
+  isMalformedJsonError,
   normalizeHeaders,
   parseCookies,
   PayloadTooLarge,
@@ -50,9 +50,10 @@ function matchPath(route: CompiledRoute, segments: string[]): Record<string, str
 export async function handleApiRequest(
   req: IncomingMessage,
   res: ServerResponse,
+  requestUrl: string | undefined = req.url,
 ): Promise<void> {
   const method = (req.method ?? 'GET').toUpperCase()
-  const url = new URL(req.url ?? '/', 'http://localhost')
+  const url = new URL(requestUrl ?? '/', 'http://localhost')
   const segments = url.pathname.split('/').filter(Boolean)
 
   let response: ApiResponse
@@ -93,7 +94,7 @@ export async function handleApiRequest(
     response = await handler(apiRequest)
   } catch (error) {
     if (error instanceof PayloadTooLarge) response = toResponse(fail.tooLarge())
-    else if (error instanceof MalformedJson)
+    else if (isMalformedJsonError(error))
       response = toResponse(fail.badRequest('malformed_json', 'Ungültiges JSON.'))
     else response = toResponse(error)
   }

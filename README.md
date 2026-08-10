@@ -251,9 +251,11 @@ npm run build
 > [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 Konfiguration: [`vercel.json`](vercel.json). Framework `vite`, Ausgabe `dist`,
-Serverless Function unter `api/[...path].ts`. Der Rewrite
-`/((?!api/).*) → /index.html` ist der SPA-Fallback: Deep Links wie
-`/room/K7M4PX` bekommen die App-Shell, `/api` bleibt bei den Functions.
+Serverless Function unter `api/handler.ts`. Ein expliziter Rewrite leitet jede
+Pfadtiefe unter `/api/*` an diese Function weiter; der Handler stellt den
+öffentlichen API-Pfad wieder her und delegiert an `server/router.ts`. Der
+Rewrite `/((?!api/).*) → /index.html` ist der SPA-Fallback: Deep Links wie
+`/room/K7M4PX` bekommen die App-Shell, `/api` bleibt bei der Function.
 
 Das Vercel-Schema erlaubt in `rewrites` keine zusätzlichen Schlüssel – ein
 `comment`-Feld lässt den Build ohne verwertbare Meldung scheitern.

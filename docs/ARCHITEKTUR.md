@@ -13,7 +13,7 @@
 └─────────────────────────────────────┼──────────┘
                                       ↓
 ┌───────────────────────────────────────────────┐
-│  api/[...path].ts  →  server/router.ts        │
+│  /api/* → api/handler.ts → server/router      │
 │      ↓                                        │
 │  server/routes  →  server/services            │
 │                          ↓                    │
@@ -44,9 +44,13 @@ Fassungen auseinanderlaufen.
 
 `server/router.ts` arbeitet auf Node-`IncomingMessage`/`ServerResponse`.
 
-- **Vercel** ruft ihn über `api/[...path].ts` auf.
+- **Vercel** leitet jede Pfadtiefe unter `/api/*` per Rewrite auf die konkrete
+  Function `api/handler.ts`; sie rekonstruiert den öffentlichen Pfad und ruft
+  den Router auf. Ein Dateiname wie `[...path].ts` ist bei einer rohen
+  Vite-Function kein verlässlicher rekursiver Catch-all.
 - **Vite** mountet ihn über `server/dev/vitePlugin.ts` als Middleware.
-- **Tests** starten ihn mit `node:http` auf einem freien Port.
+- **Tests** starten den Function-Handler mit `node:http` auf einem freien Port
+  und prüfen den Rewrite-Vertrag einschließlich tiefer Raumrouten.
 
 Es gibt keinen zweiten Codepfad, der in Produktion abweichen könnte.
 

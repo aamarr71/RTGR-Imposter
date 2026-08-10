@@ -1,8 +1,12 @@
 import { createServer, type Server } from 'node:http'
+import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import vercelHandler, {
+  REWRITTEN_API_PATH,
+  restoreApiRequestUrl,
+} from '../api/handler.js'
 import { SUGGESTIONS } from '../src/shared/config.js'
 import { hashPassword } from './services/crypto.js'
-import { handleApiRequest } from './router.js'
 import { createMemoryStore } from './store/memory.js'
 import { resetStore } from './store/index.js'
 
@@ -24,7 +28,18 @@ beforeAll(async () => {
   process.env.SESSION_SECRET = 'test-secret-mindestens-zweiunddreissig-zeichen'
   process.env.ROOM_STORE = 'memory'
 
-  server = createServer((req, res) => void handleApiRequest(req, res))
+  server = createServer((req, res) => {
+    // Vercels Node-Helper stellt `req.body` als lazy Getter bereit und wirft
+    // bei ungültigem JSON einen eigenen ApiError statt eines SyntaxError.
+    if (req.headers['x-test-vercel-malformed-json'] === '1') {
+      Object.defineProperty(req, 'body', {
+        get() {
+          throw Object.assign(new Error('Invalid JSON'), { statusCode: 400 })
+        },
+      })
+    }
+    void vercelHandler(req, res)
+  })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (typeof address === 'string' || address === null) throw new Error('Kein Port')
@@ -63,6 +78,14 @@ async function call(path: string, options: Options = {}) {
   }
 }
 
+/** Simuliert den öffentlichen Pfad nach dem Rewrite auf die konkrete Function. */
+function throughVercelRewrite(path: string): string {
+  const publicUrl = new URL(path, 'http://localhost')
+  const query = new URLSearchParams(publicUrl.searchParams)
+  query.set(REWRITTEN_API_PATH, publicUrl.pathname.replace(/^\/api\/?/, ''))
+  return `/api/handler?${query.toString()}`
+}
+
 async function loginCookie(): Promise<string> {
   const response = await fetch(`${base}/api/admin/login`, {
     method: 'POST',
@@ -96,10 +119,69 @@ describe('Routing und Fehlerform', () => {
     expect(response.status).toBe(400)
   })
 
+  it('ordnet auch Vercels Bodyparserfehler als ungültiges JSON ein', async () => {
+    const result = await call('/api/rooms', {
+      method: 'POST',
+      headers: { 'x-test-vercel-malformed-json': '1' },
+      body: { name: 'wird vom Getter nicht gelesen' },
+    })
+    expect(result.status).toBe(400)
+    expect(result.body?.error).toBe('malformed_json')
+  })
+
   it('liefert eine Gesundheitsauskunft', async () => {
     const result = await call('/api/health')
     expect(result.status).toBe(200)
     expect(result.body?.ok).toBe(true)
+  })
+})
+
+describe('Vercel-Function-Rewrite', () => {
+  it('leitet alle API-Pfadtiefen an den konkreten Handler weiter', () => {
+    const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8')) as {
+      functions: Record<string, unknown>
+      rewrites: Array<{ source: string; destination: string }>
+    }
+
+    expect(config.functions['api/handler.ts']).toBeTruthy()
+    expect(config.functions['api/[...path].ts']).toBeUndefined()
+    expect(config.rewrites[0]).toEqual({
+      source: '/api/(.*)',
+      destination: `/api/handler?${REWRITTEN_API_PATH}=$1`,
+    })
+  })
+
+  it('stellt tiefe Pfade wieder her und bewahrt öffentliche Query-Parameter', () => {
+    expect(
+      restoreApiRequestUrl(
+        '/api/handler?range=7d&__k10_api_path=admin%2Fanalytics&path=public&search=D%C3%B6ner',
+      ),
+    ).toBe('/api/admin/analytics?range=7d&path=public&search=D%C3%B6ner')
+  })
+
+  it('trägt einen erstellten Raum durch Join und authentifizierten Read', async () => {
+    const created = await call(throughVercelRewrite('/api/rooms'), {
+      method: 'POST',
+      body: { name: 'Lena' },
+    })
+    expect(created.status).toBe(201)
+
+    const code = created.body?.code as string
+    const joined = await call(throughVercelRewrite(`/api/rooms/${code}/join`), {
+      method: 'POST',
+      body: { name: 'Tom' },
+    })
+    expect(joined.status).toBe(201)
+
+    const room = await call(throughVercelRewrite(`/api/rooms/${code}`), {
+      headers: {
+        'x-player-id': created.body?.playerId as string,
+        'x-rejoin-token': created.body?.rejoinToken as string,
+      },
+    })
+    expect(room.status).toBe(200)
+    expect(room.body?.phase).toBe('lobby')
+    expect(room.body?.players).toHaveLength(2)
   })
 })
 

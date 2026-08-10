@@ -91,10 +91,13 @@ Danach prüfen:
 BASE=https://rtgr-imposter-git-amar-v1-luismeinhardtwien-2884s-projects.vercel.app
 curl -s $BASE/api/health          # {"ok":true,"store":"postgres", …}
 curl -s $BASE/api/terms | head -c 120
+curl -i $BASE/api/admin/session   # 401 als JSON aus der App, niemals Vercel-NOT_FOUND
 ```
 
 Steht dort `"store":"memory"`, ist `DATABASE_URL` in der Preview-Umgebung noch
-nicht gesetzt.
+nicht gesetzt. Der Admin-Session-Aufruf prüft absichtlich einen tieferen
+API-Pfad: So fällt ein defektes Vercel-Catch-all-Routing schon vor dem Spieltest
+auf.
 
 ---
 

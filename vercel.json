@@ -4,12 +4,16 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/[...path].ts": {
+    "api/handler.ts": {
       "maxDuration": 15,
       "memory": 512
     }
   },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/handler?__k10_api_path=$1"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import QrScanner from '@/components/whoami/QrScanner.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
@@ -18,14 +18,44 @@ import { useRoomStore } from '@/stores/room'
 
 /** Einstieg: Raum erstellen oder beitreten – plus Rückkehr in einen bekannten Raum. */
 const room = useRoomStore()
+const route = useRoute()
 const router = useRouter()
 
-const mode = ref<'choose' | 'create' | 'join'>('choose')
+function roomCodeFromQuery(value: unknown): string | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  const normalized = normalizeRoomCode(typeof raw === 'string' ? raw : '')
+  return isValidRoomCode(normalized) ? normalized : null
+}
+
+const requestedCode = roomCodeFromQuery(route.query.code)
+
+// QR- und geteilte Links führen erst über /room/:code. Ohne Membership leitet
+// die Raumansicht hierher um; der Code muss dann bereits im Join-Formular stehen.
+const mode = ref<'choose' | 'create' | 'join'>(requestedCode ? 'join' : 'choose')
 const name = ref('')
-const code = ref('')
+const code = ref(requestedCode ?? '')
 const error = ref<string | null>(null)
 const busy = ref(false)
 const scannerOpen = ref(false)
+
+// Vue Router verwendet dieselbe Komponenteninstanz wieder, wenn nur die Query
+// wechselt. Ein später geöffneter QR-/Deep-Link muss deshalb reaktiv ankommen.
+watch(
+  () => route.query.code,
+  (value) => {
+    const next = roomCodeFromQuery(value)
+    if (!next) {
+      code.value = ''
+      mode.value = 'choose'
+      error.value = null
+      scannerOpen.value = false
+      return
+    }
+    code.value = next
+    mode.value = 'join'
+    error.value = null
+  },
+)
 
 const previous = lastMembership()
 
@@ -49,7 +79,7 @@ async function createRoom() {
   busy.value = true
   try {
     const created = await room.create(name.value)
-    void router.replace({ name: 'whoami-room', params: { code: created } })
+    await router.replace({ name: 'whoami-room', params: { code: created } })
   } catch (cause) {
     error.value = describe(cause)
   } finally {
@@ -62,7 +92,7 @@ async function joinRoom() {
   busy.value = true
   try {
     const joined = await room.join(normalizeRoomCode(code.value), name.value)
-    void router.replace({ name: 'whoami-room', params: { code: joined } })
+    await router.replace({ name: 'whoami-room', params: { code: joined } })
   } catch (cause) {
     error.value = describe(cause)
   } finally {

@@ -115,6 +115,18 @@ export class MalformedJson extends Error {
   }
 }
 
+/**
+ * Erkennt sowohl den eigenen Parserfehler als auch Vercels lazy `req.body`-
+ * Fehler. In der Function wirft der Getter bei kaputtem JSON einen fremden
+ * `ApiError`; ohne Duck-Typing würde daraus fälschlich ein 500 werden.
+ */
+export function isMalformedJsonError(error: unknown): boolean {
+  if (error instanceof MalformedJson) return true
+  if (typeof error !== 'object' || error === null) return false
+  const candidate = error as { statusCode?: unknown; message?: unknown }
+  return candidate.statusCode === 400 && candidate.message === 'Invalid JSON'
+}
+
 /** Erste Adresse aus X-Forwarded-For; hinter Vercel ist das die echte Client-IP. */
 export function clientIp(req: IncomingMessage): string {
   const forwarded = req.headers['x-forwarded-for']
