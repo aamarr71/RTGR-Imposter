@@ -141,7 +141,7 @@ onMounted(load)
 
 .mod__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: var(--s-3);
 }
 
@@ -155,6 +155,9 @@ label {
 
 input,
 select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 38px;
   padding: var(--s-2) var(--s-3);
   font-size: var(--fs-sm);
@@ -162,6 +165,13 @@ select {
   background: var(--c-surface-2);
   border: 1px solid var(--c-line);
   border-radius: var(--r-sm);
+}
+
+@media (max-width: 599px), (pointer: coarse) {
+  input,
+  select {
+    font-size: 16px;
+  }
 }
 
 .mod__explanation {

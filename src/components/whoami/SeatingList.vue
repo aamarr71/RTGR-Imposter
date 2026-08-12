@@ -306,7 +306,13 @@ function onPointerUp() {
   z-index: 5;
   display: flex;
   flex-direction: column;
-  min-width: 190px;
+  width: 190px;
+  max-width: calc(
+    100vi - var(--safe-left) - var(--safe-right) - 2 * var(--page-inline)
+  );
+  max-width: calc(
+    100dvi - var(--safe-left) - var(--safe-right) - 2 * var(--page-inline)
+  );
   padding: var(--s-1);
   background: var(--c-surface-3);
   border: 1px solid var(--c-line-strong);

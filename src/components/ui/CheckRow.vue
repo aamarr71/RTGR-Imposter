@@ -75,9 +75,12 @@ const model = defineModel<boolean>({ required: true })
 }
 
 .check__text {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  overflow-wrap: anywhere;
 }
 
 .check__hint {

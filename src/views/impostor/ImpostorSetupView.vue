@@ -301,7 +301,7 @@ onMounted(() => {
 
 .players__row {
   display: grid;
-  grid-template-columns: 26px 1fr var(--touch);
+  grid-template-columns: 26px minmax(0, 1fr) var(--touch);
   align-items: start;
   gap: var(--s-2);
 }
@@ -359,13 +359,13 @@ onMounted(() => {
 
 .setup__bulk {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
   margin-bottom: var(--s-2);
 }
 
 .setup__bulk :deep(.btn) {
-  flex: 1;
-  white-space: nowrap;
+  flex: 1 1 130px;
 }
 
 .setup__timer {
@@ -387,7 +387,7 @@ onMounted(() => {
 
 .setup__customGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-3);
 }
 
@@ -398,6 +398,8 @@ onMounted(() => {
 }
 
 .setup__customGrid input {
+  width: 100%;
+  min-width: 0;
   min-height: var(--touch);
   padding: var(--s-2) var(--s-3);
   font-size: 16px;
@@ -409,5 +411,11 @@ onMounted(() => {
 
 .setup__problem {
   display: block;
+}
+
+@media (max-width: 340px) {
+  .setup__customGrid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

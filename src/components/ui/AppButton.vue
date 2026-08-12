@@ -154,4 +154,21 @@ function onClick(event: MouseEvent) {
 .btn__label:empty {
   display: none;
 }
+
+.btn__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 380px) {
+  .btn--lg {
+    min-height: 52px;
+  }
+}
+
+@media (max-height: 520px) {
+  .btn--lg {
+    min-height: 48px;
+  }
+}
 </style>

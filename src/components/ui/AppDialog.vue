@@ -48,8 +48,25 @@ onBeforeUnmount(() => el.value?.close())
 
 <style scoped>
 .dialog {
-  width: min(420px, calc(100vw - 2 * var(--s-4)));
+  inset-inline-start: max(var(--safe-left), var(--page-inline));
+  inset-inline-end: max(var(--safe-right), var(--page-inline));
+  width: 420px;
+  max-width: calc(
+    100% - max(var(--safe-left), var(--page-inline)) -
+      max(var(--safe-right), var(--page-inline))
+  );
+  margin-inline: auto;
+  max-height: calc(
+    100vh - var(--safe-top) - var(--safe-bottom) - 2 * var(--page-top)
+  );
+  max-height: calc(
+    100svh - var(--safe-top) - var(--safe-bottom) - 2 * var(--page-top)
+  );
+  max-height: calc(
+    100dvh - var(--safe-top) - var(--safe-bottom) - 2 * var(--page-top)
+  );
   padding: 0;
+  overflow: hidden;
   color: var(--c-text);
   background: var(--c-surface);
   border: 1px solid var(--c-line-strong);
@@ -67,10 +84,13 @@ onBeforeUnmount(() => el.value?.close())
 }
 
 .dialog__inner {
-  padding: var(--s-5);
+  max-height: inherit;
+  padding: var(--card-padding);
   display: flex;
   flex-direction: column;
   gap: var(--s-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .dialog__title {

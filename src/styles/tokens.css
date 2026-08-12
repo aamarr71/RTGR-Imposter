@@ -53,8 +53,8 @@
   /* --- Radien -------------------------------------------------------- */
   --r-sm: 10px;
   --r-md: 14px;
-  --r-lg: 20px;
-  --r-xl: 26px;
+  --r-lg: clamp(16px, 5vw, 20px);
+  --r-xl: clamp(20px, 6vw, 26px);
   --r-pill: 999px;
 
   /* --- Abstände ------------------------------------------------------ */
@@ -62,11 +62,11 @@
   --s-2: 8px;
   --s-3: 12px;
   --s-4: 16px;
-  --s-5: 20px;
-  --s-6: 24px;
-  --s-7: 32px;
-  --s-8: 40px;
-  --s-9: 56px;
+  --s-5: clamp(16px, 4.6vw, 20px);
+  --s-6: clamp(20px, 5.5vw, 24px);
+  --s-7: clamp(24px, 7vw, 32px);
+  --s-8: clamp(30px, 9vw, 40px);
+  --s-9: clamp(40px, 12vw, 56px);
 
   /* --- Typografie ---------------------------------------------------- */
   --font-sans:
@@ -76,10 +76,10 @@
   --fs-sm: 0.875rem;
   --fs-md: 1rem;
   --fs-lg: 1.125rem;
-  --fs-xl: 1.375rem;
-  --fs-2xl: 1.75rem;
-  --fs-3xl: 2.25rem;
-  --fs-4xl: 3rem;
+  --fs-xl: clamp(1.25rem, 5vw, 1.375rem);
+  --fs-2xl: clamp(1.5rem, 6vw, 1.75rem);
+  --fs-3xl: clamp(1.8rem, 8vw, 2.25rem);
+  --fs-4xl: clamp(2.15rem, 10vw, 3rem);
 
   /* --- Schatten & Tiefe ---------------------------------------------- */
   --sh-card: 0 18px 40px rgb(0 0 0 / 45%);
@@ -98,6 +98,11 @@
   --w-content: 460px;
   --w-wide: 1180px;
   --touch: 44px;
+  --page-inline: clamp(12px, 4vw, 16px);
+  --page-top: clamp(12px, 4vw, 16px);
+  --page-bottom: clamp(18px, 6vw, 24px);
+  --page-gap: clamp(16px, 5vw, 20px);
+  --card-padding: clamp(12px, 4vw, 16px);
 
   /* --- Safe Areas ---------------------------------------------------- */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -130,6 +135,21 @@
   --c-accent-strong: var(--c-impostor-strong);
   --c-accent-deep: var(--c-impostor-deep);
   --c-accent-glow: var(--c-impostor-glow);
+}
+
+/* Kurze Browser-Viewports (vor allem Phone-Querformat) bleiben kompakt. */
+@media (max-height: 520px) {
+  :root {
+    --s-7: 24px;
+    --s-8: 30px;
+    --s-9: 40px;
+    --fs-2xl: 1.5rem;
+    --fs-3xl: 1.8rem;
+    --fs-4xl: 2.15rem;
+    --page-top: 10px;
+    --page-bottom: 12px;
+    --page-gap: 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

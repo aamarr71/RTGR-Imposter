@@ -30,9 +30,12 @@ const model = defineModel<boolean>({ required: true })
 }
 
 .toggle__text {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-wrap: anywhere;
 }
 
 .toggle__label {

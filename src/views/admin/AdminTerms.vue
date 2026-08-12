@@ -258,6 +258,8 @@ onMounted(load)
 input,
 select,
 textarea {
+  min-width: 0;
+  max-width: 100%;
   min-height: 38px;
   padding: var(--s-2) var(--s-3);
   font-size: var(--fs-sm);
@@ -265,6 +267,14 @@ textarea {
   background: var(--c-surface-2);
   border: 1px solid var(--c-line);
   border-radius: var(--r-sm);
+}
+
+@media (max-width: 599px), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 textarea {
@@ -288,6 +298,7 @@ textarea {
 
 .terms__formActions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
   margin-left: auto;
 }

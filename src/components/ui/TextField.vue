@@ -68,6 +68,7 @@ const count = computed(() => [...model.value].length)
 <style scoped>
 .field {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: var(--s-2);
 }
@@ -80,6 +81,7 @@ const count = computed(() => [...model.value].length)
 
 .field__input {
   width: 100%;
+  min-width: 0;
   min-height: var(--touch);
   padding: var(--s-3);
   background: var(--c-surface-2);
@@ -130,6 +132,7 @@ const count = computed(() => [...model.value].length)
 .field__error,
 .field__count {
   font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
 }
 
 .field__hint {

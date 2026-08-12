@@ -60,10 +60,14 @@ function goBack() {
 <style scoped>
 .head {
   display: grid;
-  grid-template-columns: var(--touch) 1fr auto;
+  grid-template-columns: var(--touch) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-2);
   min-height: var(--touch);
+}
+
+.head__mid {
+  min-width: 0;
 }
 
 .head__back,
@@ -88,15 +92,18 @@ function goBack() {
   font-size: var(--fs-lg);
   font-weight: 700;
   letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
 }
 
 .head__sub {
   font-size: var(--fs-sm);
   color: var(--c-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .head__end {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--s-2);
   min-height: var(--touch);

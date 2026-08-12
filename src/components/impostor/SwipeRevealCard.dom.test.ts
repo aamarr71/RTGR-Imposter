@@ -98,4 +98,22 @@ describe('SwipeRevealCard', () => {
     await wrapper.get('.reveal__cover').trigger('keydown.enter')
     expect(wrapper.emitted('revealed')).toHaveLength(1)
   })
+
+  it('bleibt nach einer Viewport-Vergrößerung vollständig aufgedeckt', async () => {
+    const originalHeight = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 })
+    const wrapper = mount(SwipeRevealCard, { props: { playerName: 'Lena' } })
+
+    try {
+      await wrapper.get('.reveal__cover').trigger('keydown.enter')
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+      window.dispatchEvent(new Event('resize'))
+      await nextTick()
+
+      expect(wrapper.get('.reveal').attributes('style')).toContain('--p: 1')
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalHeight })
+    }
+  })
 })

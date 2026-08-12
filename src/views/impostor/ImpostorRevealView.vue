@@ -165,6 +165,8 @@ function leave() {
   text-align: center;
   border-radius: var(--r-xl);
   border: 1px solid;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .role--crew {

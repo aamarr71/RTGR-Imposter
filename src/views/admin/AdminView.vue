@@ -153,19 +153,27 @@ onMounted(check)
 
 .admin__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-4);
 }
 
+.admin__head > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 .admin__title {
   font-size: var(--fs-xl);
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .admin__sub {
   font-size: var(--fs-sm);
   color: var(--c-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .admin__tabs {
@@ -188,5 +196,11 @@ onMounted(check)
 .admin__tabs button.is-on {
   color: #04120f;
   background: var(--c-accent);
+}
+
+@media (max-width: 380px) {
+  .admin__tabs {
+    flex-direction: column;
+  }
 }
 </style>

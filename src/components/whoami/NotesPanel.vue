@@ -104,6 +104,7 @@ onBeforeUnmount(() => {
 
 .notes__area {
   width: 100%;
+  min-width: 0;
   padding: var(--s-3);
   font-size: 16px;
   line-height: 1.55;

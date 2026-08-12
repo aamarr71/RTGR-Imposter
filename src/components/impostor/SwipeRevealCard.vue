@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { IMPOSTOR } from '@shared/config'
 import { t } from '@/i18n'
 import AppIcon from '@/components/ui/AppIcon.vue'
@@ -16,7 +16,19 @@ import { haptics } from '@/services/haptics'
 const props = defineProps<{ playerName: string; distance?: number }>()
 const emit = defineEmits<{ revealed: [] }>()
 
-const travel = computed(() => props.distance ?? 220)
+const viewportHeight = ref(
+  typeof window === 'undefined' ? 720 : (window.visualViewport?.height ?? window.innerHeight),
+)
+
+/**
+ * Auf kurzen Phones und im Querformat verkürzt sich die Geste anhand des
+ * tatsächlichen Visual Viewports. Ein explizites `distance` bleibt für Tests
+ * und gezielte Varianten verbindlich.
+ */
+const travel = computed(
+  () => props.distance ?? Math.round(Math.min(220, Math.max(100, viewportHeight.value * 0.25))),
+)
+const stageHeight = computed(() => travel.value + 120)
 
 const offset = ref(0)
 const dragging = ref(false)
@@ -25,6 +37,22 @@ const startY = ref(0)
 
 const progress = computed(() => Math.min(1, Math.max(0, offset.value / travel.value)))
 const isRevealed = computed(() => locked.value)
+
+function syncViewportHeight() {
+  viewportHeight.value = window.visualViewport?.height ?? window.innerHeight
+  offset.value = locked.value ? travel.value : Math.min(offset.value, travel.value)
+}
+
+onMounted(() => {
+  syncViewportHeight()
+  window.addEventListener('resize', syncViewportHeight)
+  window.visualViewport?.addEventListener('resize', syncViewportHeight)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncViewportHeight)
+  window.visualViewport?.removeEventListener('resize', syncViewportHeight)
+})
 
 function onPointerDown(event: PointerEvent) {
   if (locked.value) return
@@ -69,7 +97,7 @@ function revealDirectly() {
       {{ t('impostor.reveal.instruction') }}
     </p>
 
-    <div class="reveal__stage" :style="{ height: `${travel + 120}px` }">
+    <div class="reveal__stage" :style="{ height: `${stageHeight}px` }">
       <!-- Rolleninhalt, liegt verdeckt unter der Namenskarte -->
       <div class="reveal__content" :aria-hidden="!isRevealed">
         <slot />

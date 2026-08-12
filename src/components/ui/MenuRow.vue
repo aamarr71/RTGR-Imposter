@@ -79,14 +79,23 @@ const emit = defineEmits<{ click: [] }>()
 
 .row__label {
   font-weight: 550;
+  overflow-wrap: anywhere;
 }
 
 .row__hint {
   font-size: var(--fs-sm);
   color: var(--c-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .row__chevron {
   color: var(--c-text-dim);
+}
+
+@media (max-width: 380px) {
+  .row {
+    min-height: 52px;
+    padding-inline: var(--s-3);
+  }
 }
 </style>

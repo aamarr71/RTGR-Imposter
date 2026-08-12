@@ -288,7 +288,7 @@ function placementLabel(entry: RoomBoardEntry): string {
   color: var(--c-success);
 }
 
-@media (max-width: 380px) {
+@media (max-width: 420px) {
   .board__row {
     grid-template-columns: 30px minmax(0, 1fr);
   }

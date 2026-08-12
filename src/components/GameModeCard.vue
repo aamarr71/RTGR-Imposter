@@ -49,7 +49,7 @@ const deviceIcons = Array.from({ length: Math.min(props.devices, 4) })
   display: grid;
   grid-template-columns: minmax(92px, 33%) 1fr;
   align-items: center;
-  min-height: 148px;
+  min-height: clamp(132px, 38vw, 148px);
   padding: var(--s-3);
   overflow: hidden;
   color: var(--c-text);
@@ -93,12 +93,13 @@ const deviceIcons = Array.from({ length: Math.min(props.devices, 4) })
 }
 
 .mode__text {
+  min-width: 0;
   padding-right: var(--s-2);
 }
 
-/* Skaliert mit der Gerätebreite, damit „WER BIN ICH?“ auf einer Zeile bleibt. */
+/* Skaliert mit der Gerätebreite, ohne auf kleinen Screens übergroß zu werden. */
 .mode__title {
-  font-size: clamp(1.5rem, 6.9vw, 2.2rem);
+  font-size: clamp(1.35rem, 6.4vw, 2rem);
   font-weight: 800;
   letter-spacing: -0.005em;
   line-height: 1.05;
@@ -121,9 +122,21 @@ const deviceIcons = Array.from({ length: Math.min(props.devices, 4) })
   color: rgb(255 255 255 / 62%);
 }
 
-@media (width >= 380px) {
+@media (width >= 700px) and (height >= 600px) {
   .mode {
     min-height: 168px;
+  }
+
+  .mode__title {
+    font-size: 2.2rem;
+  }
+}
+
+@media (width >= 600px) and (height < 600px) {
+  .mode {
+    grid-template-columns: minmax(92px, 24%) 1fr;
+    min-height: 128px;
+    height: 128px;
   }
 }
 </style>

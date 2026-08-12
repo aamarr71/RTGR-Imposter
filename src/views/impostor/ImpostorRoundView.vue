@@ -187,7 +187,15 @@ function leave() {
   align-items: center;
   justify-content: center;
   min-height: 46vh;
+  min-height: 46dvh;
   text-align: center;
+}
+
+@media (max-height: 520px) {
+  .announce {
+    min-height: 34vh;
+    min-height: 34dvh;
+  }
 }
 
 .announce__text {

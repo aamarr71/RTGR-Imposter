@@ -531,7 +531,7 @@ function askPlacementReset(entry: RoomBoardEntry) {
 
 .room__hostRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-2);
 }
 
@@ -599,7 +599,7 @@ function askPlacementReset(entry: RoomBoardEntry) {
   color: var(--c-text-muted);
 }
 
-@media (max-width: 380px) {
+@media (max-width: 420px) {
   .approvalList__row {
     align-items: stretch;
     flex-direction: column;
@@ -615,6 +615,12 @@ function askPlacementReset(entry: RoomBoardEntry) {
 
   .rankingList__row > .btn {
     margin-left: 40px;
+  }
+}
+
+@media (max-width: 360px) {
+  .room__hostRow {
+    grid-template-columns: 1fr;
   }
 }
 </style>

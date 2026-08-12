@@ -113,25 +113,32 @@ function resetAge() {
 
 .settings__volume {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'label range value';
   align-items: center;
   gap: var(--s-3);
   margin-top: var(--s-4);
 }
 
 .settings__volumeLabel {
+  grid-area: label;
+  min-width: 0;
   font-size: var(--fs-sm);
   color: var(--c-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .settings__volumeValue {
+  grid-area: value;
   font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
   color: var(--c-text-muted);
 }
 
 .settings__volume input[type='range'] {
+  grid-area: range;
   width: 100%;
+  min-width: 0;
   accent-color: var(--c-accent);
 }
 
@@ -152,5 +159,14 @@ function resetAge() {
   text-align: center;
   font-size: var(--fs-xs);
   color: var(--c-text-dim);
+}
+
+@media (max-width: 340px) {
+  .settings__volume {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'label value'
+      'range range';
+  }
 }
 </style>

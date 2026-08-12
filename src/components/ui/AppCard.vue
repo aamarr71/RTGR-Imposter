@@ -32,7 +32,7 @@ withDefaults(
 }
 
 .card--padded {
-  padding: var(--s-4);
+  padding: var(--card-padding);
 }
 
 .card__head {
@@ -43,15 +43,26 @@ withDefaults(
   margin-bottom: var(--s-3);
 }
 
+.card__head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.card__head > :not(div) {
+  flex: none;
+}
+
 .card__title {
   font-size: var(--fs-md);
   font-weight: 650;
   letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
 }
 
 .card__hint {
   margin-top: 2px;
   font-size: var(--fs-sm);
   color: var(--c-text-muted);
+  overflow-wrap: anywhere;
 }
 </style>

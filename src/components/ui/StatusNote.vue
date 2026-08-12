@@ -27,6 +27,11 @@ withDefaults(
   color: var(--c-text-muted);
 }
 
+.note > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .note--warn {
   color: var(--c-warning);
   border-color: rgb(245 196 81 / 30%);

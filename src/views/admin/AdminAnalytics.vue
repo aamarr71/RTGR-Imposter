@@ -202,6 +202,8 @@ input[type='radio'] {
 input[type='datetime-local'],
 input[type='text'],
 .stats__danger input {
+  min-width: 0;
+  max-width: 100%;
   min-height: 38px;
   padding: var(--s-2) var(--s-3);
   font-size: var(--fs-sm);
@@ -209,6 +211,14 @@ input[type='text'],
   background: var(--c-surface-2);
   border: 1px solid var(--c-line);
   border-radius: var(--r-sm);
+}
+
+@media (max-width: 599px), (pointer: coarse) {
+  input[type='datetime-local'],
+  input[type='text'],
+  .stats__danger input {
+    font-size: 16px;
+  }
 }
 
 .stats__export {
@@ -219,7 +229,7 @@ input[type='text'],
 
 .stats__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
   gap: var(--s-3);
 }
 
