@@ -19,7 +19,10 @@ export default defineConfig({
     // Mountet dieselben API-Handler wie Vercel als Dev-Middleware unter /api.
     apiDevServer(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Ein neuer Service Worker darf keinen noch offenen Tab mit alten
+      // Lazy-Chunk-Namen übernehmen. Er wird beim nächsten vollständigen
+      // Öffnen der App aktiv; Chunk-Recovery fängt das Deployment-Fenster ab.
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'komm 10te',

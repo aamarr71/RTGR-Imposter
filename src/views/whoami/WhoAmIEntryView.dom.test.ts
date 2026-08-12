@@ -2,7 +2,8 @@ import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { rememberMembership } from '@/services/roomSync'
 import { storage } from '@/services/storage'
 import WhoAmIEntryView from './WhoAmIEntryView.vue'
 
@@ -14,6 +15,11 @@ async function mountEntry(path: string) {
         path: '/wer-bin-ich',
         name: 'whoami-entry',
         component: WhoAmIEntryView,
+      },
+      {
+        path: '/room/:code',
+        name: 'whoami-room',
+        component: { template: '<div>Raum</div>' },
       },
     ],
   })
@@ -67,6 +73,17 @@ describe('Wer-bin-ich-Deep-Link', () => {
 
     expect(wrapper.find('input[autocomplete="off"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Raum erstellen')
+    wrapper.unmount()
+  })
+
+  it('öffnet über „Zurück in Raum“ die gespeicherte Zielroute', async () => {
+    rememberMembership({ code: 'ABCDEF', playerId: 'p1', rejoinToken: 'geheim' })
+    const { router, wrapper } = await mountEntry('/wer-bin-ich')
+    const rejoin = wrapper.get('a[href="/room/ABCDEF"]')
+
+    await rejoin.trigger('click')
+
+    await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/room/ABCDEF'))
     wrapper.unmount()
   })
 })
