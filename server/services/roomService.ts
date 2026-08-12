@@ -1,11 +1,23 @@
 import { randomInt, randomUUID } from 'node:crypto'
 import { WHO_AM_I } from '../../src/shared/config.js'
 import { circularAssignmentMap, renumberSeats, applyOrder } from '../../src/shared/seating.js'
-import type { RoomBoardEntry, RoomPlayerView, RoomView } from '../../src/shared/types.js'
+import type {
+  RoomBoardEntry,
+  RoomPlayerRoundState,
+  RoomPlayerView,
+  RoomView,
+} from '../../src/shared/types.js'
 import { playerNameKey, validatePlayerName, validateWhoAmITerm } from '../../src/shared/validation.js'
 import { fail } from '../errors.js'
 import { randomToken, safeEqual, sha256 } from './crypto.js'
-import type { AssignmentRecord, PlayerRecord, RoomRecord, RoomStore, RoomTx } from '../store/types.js'
+import type {
+  AssignmentRecord,
+  PlayerRecord,
+  RoomRecord,
+  RoomStore,
+  RoomTx,
+  RoundProgressRecord,
+} from '../store/types.js'
 
 /**
  * Sämtliche Spielregeln von „Wer bin ich?“ – einmalig und speicherunabhängig.
@@ -73,6 +85,86 @@ function requireHost(room: RoomRecord, player: PlayerRecord): void {
   if (room.hostPlayerId !== player.id) throw fail.forbidden('not_host', 'Nur der Host darf das.')
 }
 
+function progressState(progress: RoundProgressRecord | undefined): RoomPlayerRoundState {
+  if (progress?.placement !== null && progress?.placement !== undefined) return 'finished'
+  return progress?.claimRequestedAt !== null && progress?.claimRequestedAt !== undefined
+    ? 'pending'
+    : 'active'
+}
+
+function progressFields(progress: RoundProgressRecord | undefined) {
+  return {
+    roundState: progressState(progress),
+    placement: progress?.placement ?? null,
+    placementClaimId: progress?.claimId ?? null,
+    placementAutomatic: progress?.automatic ?? false,
+  }
+}
+
+/**
+ * Stellt nach jeder Hostkorrektur die Rundeninvarianten wieder her:
+ * explizite Plätze sind lückenlos, automatische Plätze werden neu berechnet,
+ * und genau der letzte verbleibende Spieler erhält automatisch Platz N.
+ */
+function reconcileRoundProgress(
+  room: RoomRecord,
+  players: PlayerRecord[],
+  records: RoundProgressRecord[],
+  now: number,
+): RoundProgressRecord[] {
+  const playerIds = new Set(players.map((player) => player.id))
+  const explicit = records
+    .filter(
+      (record) =>
+        playerIds.has(record.playerId) && record.placement !== null && !record.automatic,
+    )
+    .sort(
+      (a, b) =>
+        (a.placement ?? Number.MAX_SAFE_INTEGER) - (b.placement ?? Number.MAX_SAFE_INTEGER) ||
+        (a.approvedAt ?? 0) - (b.approvedAt ?? 0) ||
+        a.playerId.localeCompare(b.playerId),
+    )
+    .map((record, index) => ({ ...record, placement: index + 1, automatic: false }))
+
+  const explicitIds = new Set(explicit.map((record) => record.playerId))
+  const pending = records
+    .filter(
+      (record) =>
+        playerIds.has(record.playerId) &&
+        !explicitIds.has(record.playerId) &&
+        record.claimRequestedAt !== null &&
+        (record.placement === null || record.automatic),
+    )
+    .map((record) => ({
+      ...record,
+      placement: null,
+      approvedAt: null,
+      automatic: false,
+    }))
+
+  if (players.length > 1 && explicit.length === players.length - 1) {
+    const last = players.find((player) => !explicitIds.has(player.id))
+    if (last) {
+      const previous = records.find((record) => record.playerId === last.id)
+      return [
+        ...explicit,
+        {
+          roomId: room.id,
+          roundNumber: room.roundNumber,
+          playerId: last.id,
+          claimId: previous?.claimId ?? null,
+          claimRequestedAt: previous?.claimRequestedAt ?? null,
+          placement: players.length,
+          approvedAt: now,
+          automatic: true,
+        },
+      ]
+    }
+  }
+
+  return [...explicit, ...pending]
+}
+
 /**
  * Hostübergabe nach fünf Minuten Abwesenheit an den verbundenen Spieler mit der
  * niedrigsten Sitznummer. Ein zurückkehrender Ex-Host bleibt normaler Spieler.
@@ -132,12 +224,14 @@ export function buildView(
   room: RoomRecord,
   players: PlayerRecord[],
   assignments: AssignmentRecord[],
+  roundProgress: RoundProgressRecord[],
   viewer: PlayerRecord,
   notes: string,
   now: number,
 ): RoomView {
   const ordered = [...players].sort(bySeat)
   const submitted = new Set(assignments.map((assignment) => assignment.authorPlayerId))
+  const progressByPlayer = new Map(roundProgress.map((progress) => [progress.playerId, progress]))
 
   const playerViews: RoomPlayerView[] = ordered.map((player) => ({
     id: player.id,
@@ -146,6 +240,7 @@ export function buildView(
     isHost: room.hostPlayerId === player.id,
     online: isOnline(player, now),
     hasSubmittedTerm: submitted.has(player.id),
+    ...progressFields(progressByPlayer.get(player.id)),
   }))
 
   let board: RoomBoardEntry[] | null = null
@@ -159,6 +254,7 @@ export function buildView(
       isSelf: player.id === viewer.id,
       // Kernregel: der eigene Begriff wird gar nicht erst mitgesendet.
       term: player.id === viewer.id ? null : (termByTarget.get(player.id) ?? null),
+      ...progressFields(progressByPlayer.get(player.id)),
     }))
   }
 
@@ -351,8 +447,17 @@ async function finishView(
   now: number,
 ): Promise<RoomView> {
   const assignments = await tx.listAssignments(room.id, room.roundNumber)
+  const roundProgress = await tx.listRoundProgress(room.id, room.roundNumber)
   const notes = await tx.getNotes(room.id, viewer.id, room.roundNumber)
-  return buildView(room, players, assignments, { ...viewer, lastSeenAt: now }, notes, now)
+  return buildView(
+    room,
+    players,
+    assignments,
+    roundProgress,
+    { ...viewer, lastSeenAt: now },
+    notes,
+    now,
+  )
 }
 
 /** Gemeinsamer Rahmen für alle mutierenden Aktionen. */
@@ -505,6 +610,16 @@ export function leaveRoom(store: RoomStore, code: string, actor: Actor) {
     if (!room || room.phase === 'closed') return
     const players = await tx.listPlayers(room.id)
     const self = authenticate(players, actor)
+    // Der Spielerkreis einer laufenden Runde ist stabil: sonst würden durch
+    // FK-Cascades Begriffe verschwinden und N bzw. der automatische letzte
+    // Platz sich mitten in der Runde verändern. Offlinegehen bleibt möglich;
+    // der Platz wird erst nach dem Rundenende verlassen.
+    if (room.phase === 'playing') {
+      throw fail.conflict(
+        'round_in_progress',
+        'Während einer laufenden Runde kann der Platz nicht verlassen werden.',
+      )
+    }
 
     await tx.deletePlayer(self.id)
     const remaining = renumberSeats(players.filter((player) => player.id !== self.id).sort(bySeat))
@@ -576,14 +691,145 @@ export function startRound(store: RoomStore, code: string, actor: Actor) {
   })
 }
 
+/** Ein Spieler meldet ausschließlich sich selbst zur Bestätigung an. */
+export function requestPlacement(store: RoomStore, code: string, actor: Actor) {
+  return mutate(store, code, actor, async ({ tx, room, self, players, now }) => {
+    if (room.phase !== 'playing') throw fail.conflict('not_playing', 'Es läuft keine Runde.')
+
+    const records = await tx.listRoundProgress(room.id, room.roundNumber)
+    const current = records.find((record) => record.playerId === self.id)
+    if (current?.placement !== null && current?.placement !== undefined) {
+      throw fail.conflict('placement_already_finished', 'Deine Platzierung steht bereits fest.')
+    }
+    // Mehrere Geräte oder Doppelklicks desselben Spielers bleiben idempotent.
+    if (current?.claimRequestedAt !== null && current?.claimRequestedAt !== undefined) return null
+
+    const next = reconcileRoundProgress(
+      room,
+      players,
+      [
+        ...records.filter((record) => record.playerId !== self.id),
+        {
+          roomId: room.id,
+          roundNumber: room.roundNumber,
+          playerId: self.id,
+          claimId: randomUUID(),
+          claimRequestedAt: now,
+          placement: null,
+          approvedAt: null,
+          automatic: false,
+        },
+      ],
+      now,
+    )
+    await tx.replaceRoundProgress(room.id, room.roundNumber, next)
+    return { room, event: 'placement_requested' }
+  })
+}
+
+/** Der Host bestätigt eine offene Meldung; der nächste Platz entsteht im Raum-Lock. */
+export function approvePlacement(
+  store: RoomStore,
+  code: string,
+  actor: Actor,
+  targetId: string,
+  claimId: string,
+) {
+  return mutate(store, code, actor, async ({ tx, room, self, players, now }) => {
+    requireHost(room, self)
+    if (room.phase !== 'playing') throw fail.conflict('not_playing', 'Es läuft keine Runde.')
+    requirePlayer(players, targetId)
+
+    const records = await tx.listRoundProgress(room.id, room.roundNumber)
+    const current = records.find((record) => record.playerId === targetId)
+    // Die Entscheidung gilt ausschließlich für genau die Meldung, die der Host
+    // gesehen hat. So kann eine verspätete Antwort keine neuere Meldung treffen.
+    if (!current || current.claimId !== claimId) {
+      throw fail.conflict(
+        'placement_claim_stale',
+        'Diese Meldung ist nicht mehr aktuell.',
+      )
+    }
+    // Wiederholte Bestätigung derselben bereits erledigten Meldung bleibt
+    // idempotent und erzeugt weder einen neuen Platz noch eine neue Version.
+    if (current.placement !== null) return null
+    if (current.claimRequestedAt === null) throw fail.internal()
+
+    const withoutTargetOrAutomatic = records.filter(
+      (record) => record.playerId !== targetId && !record.automatic,
+    )
+    const explicitCount = withoutTargetOrAutomatic.filter(
+      (record) => record.placement !== null,
+    ).length
+    const approved: RoundProgressRecord = {
+      ...current,
+      placement: explicitCount + 1,
+      approvedAt: now,
+      automatic: false,
+    }
+    const next = reconcileRoundProgress(
+      room,
+      players,
+      [...withoutTargetOrAutomatic, approved],
+      now,
+    )
+    await tx.replaceRoundProgress(room.id, room.roundNumber, next)
+    return { room, event: 'placement_approved' }
+  })
+}
+
+/**
+ * Hostkorrektur: lehnt eine offene Meldung ab oder nimmt eine explizite
+ * Freigabe zurück. Nachfolgende Plätze rücken lückenlos auf; ein zuvor
+ * automatisch Letzter wird wieder aktiv, sobald mehr als ein Platz offen ist.
+ */
+export function resetPlacement(
+  store: RoomStore,
+  code: string,
+  actor: Actor,
+  targetId: string,
+  claimId: string,
+) {
+  return mutate(store, code, actor, async ({ tx, room, self, players, now }) => {
+    requireHost(room, self)
+    if (room.phase !== 'playing') throw fail.conflict('not_playing', 'Es läuft keine Runde.')
+    requirePlayer(players, targetId)
+
+    const records = await tx.listRoundProgress(room.id, room.roundNumber)
+    const current = records.find((record) => record.playerId === targetId)
+    if (!current || current.claimId !== claimId) {
+      throw fail.conflict('placement_claim_stale', 'Diese Meldung ist nicht mehr aktuell.')
+    }
+    if (current.automatic) {
+      throw fail.conflict(
+        'placement_automatic',
+        'Der automatisch letzte Platz folgt aus den übrigen Platzierungen.',
+      )
+    }
+
+    const next = reconcileRoundProgress(
+      room,
+      players,
+      records.filter((record) => record.playerId !== targetId),
+      now,
+    )
+    await tx.replaceRoundProgress(room.id, room.roundNumber, next)
+    return {
+      room,
+      event: current.placement === null ? 'placement_rejected' : 'placement_reversed',
+    }
+  })
+}
+
 export function endRound(store: RoomStore, code: string, actor: Actor) {
   return mutate(store, code, actor, async ({ tx, room, self }) => {
     requireHost(room, self)
     if (room.phase !== 'playing') throw fail.conflict('not_playing', 'Es läuft keine Runde.')
 
-    // Datensparsamkeit: Begriffe und Notizen der beendeten Runde werden sofort
-    // gelöscht, nicht erst mit dem Raum.
+    // Datensparsamkeit: Begriffe, Notizen und Platzierungen der beendeten
+    // Runde werden sofort gelöscht, nicht erst mit dem Raum.
     await tx.deleteAssignmentsForRound(room.id, room.roundNumber)
+    await tx.deleteRoundProgressForRound(room.id, room.roundNumber)
 
     return {
       room: {

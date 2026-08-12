@@ -123,6 +123,7 @@ und Indizes angelegt. Bestehende Tabellen werden weder verändert noch gelöscht
 | `rate_limit_hits` | gleitendes Fenster für serverseitige Rate-Limits |
 | `rooms`, `room_players` | Wer-bin-ich-Räume und Sitzordnung |
 | `whoami_assignments` | vergebene Begriffe je Runde |
+| `whoami_round_progress` | offene Erraten-Meldungen und serverseitige Plätze der aktuellen Runde |
 | `player_private_notes` | private Notizen, ausschließlich für den jeweiligen Spieler |
 | `room_events` | Revisionsprotokoll des Raums, bewusst ohne Inhalte |
 | `analytics_events`, `analytics_daily_aggregates` | anonyme Ereignisse und Aggregate |

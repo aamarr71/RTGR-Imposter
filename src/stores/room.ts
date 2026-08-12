@@ -46,6 +46,7 @@ export const useRoomStore = defineStore('room', () => {
   const membership = ref<Membership | null>(null)
   const connected = ref(true)
   const fatalError = ref<string | null>(null)
+  const actionError = ref<string | null>(null)
   const busy = ref(false)
   /** Gesetzt, sobald ein Sync endgültig aufgegeben hat. */
   const terminal = ref<{ code: string; accessLost: boolean } | null>(null)
@@ -53,6 +54,15 @@ export const useRoomStore = defineStore('room', () => {
   let sync: RoomSyncService | null = null
   /** Raum, zu dem der laufende Sync gehört – Grundlage für `release()`. */
   let syncCode: string | null = null
+  /**
+   * Trennt asynchrone Aktionen verschiedener Raum-/Membership-Lebenszyklen.
+   *
+   * Ein bloßer `busy`-Boolean reicht nicht: Wenn eine Aktion aus Raum A nach
+   * einem Wechsel zu B fertig wird, darf ihr `finally` eine inzwischen
+   * laufende Aktion in B nicht entsperren. Jeder Kontextwechsel entwertet
+   * deshalb die zuvor aufgenommenen Epochen.
+   */
+  let membershipEpoch = 0
 
   const isHost = computed(() => view.value?.you.isHost ?? false)
   const phase = computed(() => view.value?.phase ?? 'lobby')
@@ -72,10 +82,44 @@ export const useRoomStore = defineStore('room', () => {
     )
   }
 
+  function beginsNewMembershipEpoch() {
+    membershipEpoch += 1
+    busy.value = false
+  }
+
+  function isCurrentMembershipEpoch(epoch: number, expected: Membership): boolean {
+    return epoch === membershipEpoch && sameMembership(membership.value, expected)
+  }
+
+  function viewBelongsToMembership(incoming: RoomView, expected: Membership): boolean {
+    return incoming.code === expected.code && incoming.you?.playerId === expected.playerId
+  }
+
   function stopSync() {
     sync?.stop()
     sync = null
     syncCode = null
+  }
+
+  type ViewAdoption = 'ignored' | 'accepted' | 'advanced'
+
+  /**
+   * Polling und Aktionsantworten dürfen nur innerhalb derselben Membership
+   * vorwärts durch die Raumversion laufen. Raumcode und eigener Spieler sind
+   * Teil der Vertrauensgrenze; eine fremde Sicht wird nie übernommen.
+   */
+  function adoptView(incoming: RoomView, expected: Membership): ViewAdoption {
+    if (!sameMembership(membership.value, expected)) return 'ignored'
+    if (!viewBelongsToMembership(incoming, expected)) return 'ignored'
+
+    const current = view.value
+    const currentBelongsToMembership =
+      current !== null && viewBelongsToMembership(current, expected)
+    if (currentBelongsToMembership && incoming.version < current.version) return 'ignored'
+
+    const advanced = !currentBelongsToMembership || incoming.version > current.version
+    view.value = incoming
+    return advanced ? 'advanced' : 'accepted'
   }
 
   function attach(next: Membership) {
@@ -85,9 +129,11 @@ export const useRoomStore = defineStore('room', () => {
     if (sync && sameMembership(membership.value, next)) return
 
     stopSync()
+    beginsNewMembershipEpoch()
     view.value = null
     connected.value = true
     fatalError.value = null
+    actionError.value = null
     terminal.value = null
     membership.value = next
     rememberMembership(next)
@@ -102,8 +148,12 @@ export const useRoomStore = defineStore('room', () => {
       if (sync !== own) return
       // Nur neuere Stände übernehmen: eine langsame Antwort darf einen
       // frischeren Zustand nicht überschreiben.
-      if (!view.value || incoming.version >= view.value.version) view.value = incoming
+      const adoption = adoptView(incoming, next)
+      if (adoption === 'ignored') return
       fatalError.value = null
+      // Ein wirklich neuer Serverstand macht einen alten Aktionsfehler
+      // gegenstandslos. Ein Poll derselben Version lässt ihn sichtbar.
+      if (adoption === 'advanced') actionError.value = null
     })
     own.onConnectionChange((value) => {
       if (sync !== own) return
@@ -119,6 +169,7 @@ export const useRoomStore = defineStore('room', () => {
       if (accessLost) {
         // Platz oder Raum sind weg: gespeicherte Zugangsdaten wegräumen.
         forgetMembership(next.code)
+        beginsNewMembershipEpoch()
         membership.value = null
       }
       terminal.value = { code: next.code, accessLost }
@@ -129,6 +180,7 @@ export const useRoomStore = defineStore('room', () => {
 
   function detach() {
     stopSync()
+    beginsNewMembershipEpoch()
     view.value = null
     connected.value = true
   }
@@ -177,14 +229,25 @@ export const useRoomStore = defineStore('room', () => {
   /** Führt eine Aktion aus und übernimmt die zurückgelieferte Sicht sofort. */
   async function act<T extends RoomView | void>(
     operation: (m: Membership) => Promise<T>,
-  ): Promise<void> {
-    if (!membership.value || busy.value) return
+  ): Promise<boolean> {
+    if (!membership.value || busy.value) return false
+    const current = membership.value
+    const epoch = membershipEpoch
     busy.value = true
+    actionError.value = null
     try {
-      const result = await operation(membership.value)
-      if (result) view.value = result as RoomView
+      const result = await operation(current)
+      if (result && isCurrentMembershipEpoch(epoch, current)) {
+        adoptView(result as RoomView, current)
+      }
+      return true
+    } catch (error) {
+      if (isCurrentMembershipEpoch(epoch, current)) {
+        actionError.value = error instanceof HttpError ? error.code : 'network'
+      }
+      return false
     } finally {
-      busy.value = false
+      if (isCurrentMembershipEpoch(epoch, current)) busy.value = false
     }
   }
 
@@ -195,12 +258,18 @@ export const useRoomStore = defineStore('room', () => {
   const setLocked = (locked: boolean) => act((m) => roomApi.setLocked(m, locked))
   const transferHost = (playerId: string) => act((m) => roomApi.transferHost(m, playerId))
   const resetSubmission = (playerId: string) => act((m) => roomApi.resetSubmission(m, playerId))
+  const requestPlacement = () => act((m) => roomApi.requestPlacement(m))
+  const approvePlacement = (playerId: string, claimId: string) =>
+    act((m) => roomApi.approvePlacement(m, playerId, claimId))
+  const resetPlacement = (playerId: string, claimId: string) =>
+    act((m) => roomApi.resetPlacement(m, playerId, claimId))
   const endRound = () => act((m) => roomApi.end(m))
 
   async function startRound(): Promise<void> {
     const playerCount = view.value?.players.length ?? 0
-    await act((m) => roomApi.start(m))
-    analytics.track('whoami_round_started', { mode: 'whoami', playerCount })
+    if (await act((m) => roomApi.start(m))) {
+      analytics.track('whoami_round_started', { mode: 'whoami', playerCount })
+    }
   }
 
   /** Notizen werden direkt gespeichert; die Antwort ersetzt die Sicht nicht. */
@@ -220,15 +289,32 @@ export const useRoomStore = defineStore('room', () => {
     detach()
     membership.value = null
     fatalError.value = null
+    actionError.value = null
     terminal.value = null
   }
 
-  async function leave(): Promise<void> {
-    if (!membership.value) return
+  async function leave(): Promise<boolean> {
+    if (!membership.value) return false
     const current = membership.value
+    const epoch = membershipEpoch
+    actionError.value = null
+    try {
+      await roomApi.leave(current)
+    } catch (error) {
+      if (isCurrentMembershipEpoch(epoch, current)) {
+        actionError.value = error instanceof HttpError ? error.code : 'network'
+      }
+      return false
+    }
+    if (!isCurrentMembershipEpoch(epoch, current)) {
+      // Bei einem Wechsel in einen anderen Raum darf dessen gespeicherte
+      // Membership nicht durch die alte Leave-Antwort berührt werden.
+      if (membership.value?.code !== current.code) forgetMembership(current.code)
+      return true
+    }
     reset()
     forgetMembership(current.code)
-    await roomApi.leave(current).catch(() => undefined)
+    return true
   }
 
   async function close(): Promise<void> {
@@ -244,6 +330,7 @@ export const useRoomStore = defineStore('room', () => {
     membership,
     connected,
     fatalError,
+    actionError,
     busy,
     isHost,
     phase,
@@ -262,6 +349,9 @@ export const useRoomStore = defineStore('room', () => {
     setLocked,
     transferHost,
     resetSubmission,
+    requestPlacement,
+    approvePlacement,
+    resetPlacement,
     startRound,
     endRound,
     saveNotes,

@@ -81,6 +81,7 @@ export interface ImpostorRound {
  * ------------------------------------------------------------------ */
 
 export type RoomPhase = 'lobby' | 'assigning' | 'playing' | 'closed'
+export type RoomPlayerRoundState = 'active' | 'pending' | 'finished'
 
 export interface RoomPlayerView {
   id: string
@@ -91,6 +92,14 @@ export interface RoomPlayerView {
   online: boolean
   /** Nur in Lobby/Assigning: hat dieser Spieler seinen Begriff schon abgegeben? */
   hasSubmittedTerm: boolean
+  /** Fortschritt ausschließlich innerhalb der aktuellen Runde. */
+  roundState: RoomPlayerRoundState
+  /** Serverseitig vergebener, lückenloser Platz; sonst `null`. */
+  placement: number | null
+  /** Revision der aktuellen Meldung; Hostentscheidungen müssen exakt diese ID bestätigen. */
+  placementClaimId: string | null
+  /** Der letzte verbleibende Spieler erhält seinen Platz automatisch. */
+  placementAutomatic: boolean
 }
 
 /** Was ein Spieler in der laufenden Runde über einen Mitspieler sehen darf. */
@@ -105,6 +114,10 @@ export interface RoomBoardEntry {
    * bewusst `null` – der echte Begriff verlässt niemals den Server.
    */
   term: string | null
+  roundState: RoomPlayerRoundState
+  placement: number | null
+  placementClaimId: string | null
+  placementAutomatic: boolean
 }
 
 /** Serverseitig gefilterte Sicht eines konkreten Spielers auf den Raum. */

@@ -98,6 +98,67 @@ async function loginCookie(): Promise<string> {
   return cookie.split(';')[0] as string
 }
 
+interface ApiMember {
+  code: string
+  playerId: string
+  rejoinToken: string
+}
+
+function member(body: Record<string, unknown> | null): ApiMember {
+  return {
+    code: body?.code as string,
+    playerId: body?.playerId as string,
+    rejoinToken: body?.rejoinToken as string,
+  }
+}
+
+function playerHeaders(value: ApiMember): Record<string, string> {
+  return {
+    'x-player-id': value.playerId,
+    'x-rejoin-token': value.rejoinToken,
+  }
+}
+
+async function createApiPlayingRoom() {
+  const created = await call('/api/rooms', { method: 'POST', body: { name: 'Lena' } })
+  const host = member(created.body)
+  const joined: ApiMember[] = []
+  for (const name of ['Tom', 'Mia']) {
+    joined.push(
+      member(
+        (
+          await call(`/api/rooms/${host.code}/join`, {
+            method: 'POST',
+            body: { name },
+          })
+        ).body,
+      ),
+    )
+  }
+  const members = [host, ...joined]
+  for (const [index, value] of members.entries()) {
+    expect(
+      (
+        await call(`/api/rooms/${host.code}/term`, {
+          method: 'POST',
+          headers: playerHeaders(value),
+          body: { term: `Begriff-${index + 1}` },
+        })
+      ).status,
+    ).toBe(200)
+  }
+  expect(
+    (
+      await call(`/api/rooms/${host.code}/start`, {
+        method: 'POST',
+        headers: playerHeaders(host),
+        body: {},
+      })
+    ).status,
+  ).toBe(200)
+  return { code: host.code, members }
+}
+
 describe('Routing und Fehlerform', () => {
   it('meldet unbekannte Endpunkte als 404', async () => {
     const result = await call('/api/gibtsnicht')
@@ -182,6 +243,161 @@ describe('Vercel-Function-Rewrite', () => {
     expect(room.status).toBe(200)
     expect(room.body?.phase).toBe('lobby')
     expect(room.body?.players).toHaveLength(2)
+  })
+})
+
+describe('Wer-bin-ich-Rundenplatzierung', () => {
+  it('verlangt eine eigene Mitgliedschaft und eine laufende Runde', async () => {
+    const created = member(
+      (await call('/api/rooms', { method: 'POST', body: { name: 'Lena' } })).body,
+    )
+    const missing = await call(`/api/rooms/${created.code}/placement`, {
+      method: 'POST',
+      body: {},
+    })
+    expect(missing.status).toBe(401)
+
+    const lobby = await call(`/api/rooms/${created.code}/placement`, {
+      method: 'POST',
+      headers: playerHeaders(created),
+      body: {},
+    })
+    expect(lobby.status).toBe(409)
+    expect(lobby.body?.error).toBe('not_playing')
+  })
+
+  it('führt Meldung, Hostbestätigung, Auto-Letzten und Korrektur durch den Vercel-Rewrite', async () => {
+    const { code, members } = await createApiPlayingRoom()
+    const [host, tom, mia] = members as [ApiMember, ApiMember, ApiMember]
+    const claimIds = new Map<string, string>()
+
+    for (const value of members) {
+      const claimed = await call(`/api/rooms/${code}/placement`, {
+        method: 'POST',
+        headers: playerHeaders(value),
+        body: {},
+      })
+      expect(claimed.status).toBe(200)
+      const player = (claimed.body?.players as Array<Record<string, unknown>>).find(
+        (entry) => entry.id === value.playerId,
+      )
+      expect(player?.placementClaimId).toEqual(expect.any(String))
+      claimIds.set(value.playerId, player?.placementClaimId as string)
+    }
+
+    const forbidden = await call(`/api/rooms/${code}/placements/${host.playerId}/approve`, {
+      method: 'POST',
+      headers: playerHeaders(tom),
+      body: { claimId: claimIds.get(host.playerId) },
+    })
+    expect(forbidden.status).toBe(403)
+    expect(forbidden.body?.error).toBe('not_host')
+
+    const first = await call(
+      throughVercelRewrite(`/api/rooms/${code}/placements/${host.playerId}/approve`),
+      {
+        method: 'POST',
+        headers: playerHeaders(host),
+        body: { claimId: claimIds.get(host.playerId) },
+      },
+    )
+    expect(first.status).toBe(200)
+
+    const complete = await call(`/api/rooms/${code}/placements/${tom.playerId}/approve`, {
+      method: 'POST',
+      headers: playerHeaders(host),
+      body: { claimId: claimIds.get(tom.playerId) },
+    })
+    const completedBoard = complete.body?.board as Array<Record<string, unknown>>
+    expect(completedBoard.map((entry) => entry.placement).sort()).toEqual([1, 2, 3])
+    expect(completedBoard.find((entry) => entry.playerId === mia.playerId)).toMatchObject({
+      placement: 3,
+      placementAutomatic: true,
+      roundState: 'finished',
+    })
+
+    const corrected = await call(`/api/rooms/${code}/placements/${host.playerId}`, {
+      method: 'DELETE',
+      headers: playerHeaders(host),
+      body: { claimId: claimIds.get(host.playerId) },
+    })
+    expect(corrected.status).toBe(200)
+    const correctedBoard = corrected.body?.board as Array<Record<string, unknown>>
+    expect(correctedBoard.find((entry) => entry.playerId === host.playerId)?.roundState).toBe(
+      'active',
+    )
+    expect(correctedBoard.find((entry) => entry.playerId === tom.playerId)?.placement).toBe(1)
+    expect(correctedBoard.find((entry) => entry.playerId === mia.playerId)?.roundState).toBe(
+      'pending',
+    )
+  })
+
+  it('bindet Hostentscheidungen an die aktuelle Meldungs-ID', async () => {
+    const { code, members } = await createApiPlayingRoom()
+    const [host, tom] = members as [ApiMember, ApiMember]
+
+    const first = await call(`/api/rooms/${code}/placement`, {
+      method: 'POST',
+      headers: playerHeaders(tom),
+      body: {},
+    })
+    const firstClaimId = (
+      first.body?.players as Array<Record<string, unknown>>
+    ).find((entry) => entry.id === tom.playerId)?.placementClaimId as string
+    expect(firstClaimId).toEqual(expect.any(String))
+
+    const rejected = await call(`/api/rooms/${code}/placements/${tom.playerId}`, {
+      method: 'DELETE',
+      headers: playerHeaders(host),
+      body: { claimId: firstClaimId },
+    })
+    expect(rejected.status).toBe(200)
+
+    const reclaimed = await call(`/api/rooms/${code}/placement`, {
+      method: 'POST',
+      headers: playerHeaders(tom),
+      body: {},
+    })
+    const secondClaimId = (
+      reclaimed.body?.players as Array<Record<string, unknown>>
+    ).find((entry) => entry.id === tom.playerId)?.placementClaimId as string
+    expect(secondClaimId).toEqual(expect.any(String))
+    expect(secondClaimId).not.toBe(firstClaimId)
+
+    const staleApproval = await call(
+      `/api/rooms/${code}/placements/${tom.playerId}/approve`,
+      {
+        method: 'POST',
+        headers: playerHeaders(host),
+        body: { claimId: firstClaimId },
+      },
+    )
+    expect(staleApproval.status).toBe(409)
+    expect(staleApproval.body?.error).toBe('placement_claim_stale')
+
+    const staleDelete = await call(`/api/rooms/${code}/placements/${tom.playerId}`, {
+      method: 'DELETE',
+      headers: playerHeaders(host),
+      body: { claimId: firstClaimId },
+    })
+    expect(staleDelete.status).toBe(409)
+    expect(staleDelete.body?.error).toBe('placement_claim_stale')
+
+    const approved = await call(`/api/rooms/${code}/placements/${tom.playerId}/approve`, {
+      method: 'POST',
+      headers: playerHeaders(host),
+      body: { claimId: secondClaimId },
+    })
+    expect(approved.status).toBe(200)
+    expect(
+      (approved.body?.players as Array<Record<string, unknown>>).find(
+        (entry) => entry.id === tom.playerId,
+      ),
+    ).toMatchObject({
+      roundState: 'finished',
+      placement: 1,
+      placementClaimId: secondClaimId,
+    })
   })
 })
 

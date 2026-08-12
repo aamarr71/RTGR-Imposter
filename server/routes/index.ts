@@ -55,6 +55,17 @@ export const routes: RouteDefinition[] = [
   { method: 'POST', path: '/api/rooms/:code/host', handler: rooms.postHost },
   { method: 'POST', path: '/api/rooms/:code/reset-submission', handler: rooms.postResetSubmission },
   { method: 'POST', path: '/api/rooms/:code/start', handler: rooms.postStart },
+  { method: 'POST', path: '/api/rooms/:code/placement', handler: rooms.postPlacementRequest },
+  {
+    method: 'POST',
+    path: '/api/rooms/:code/placements/:playerId/approve',
+    handler: rooms.postPlacementApproval,
+  },
+  {
+    method: 'DELETE',
+    path: '/api/rooms/:code/placements/:playerId',
+    handler: rooms.deletePlacement,
+  },
   { method: 'POST', path: '/api/rooms/:code/end', handler: rooms.postEnd },
   { method: 'POST', path: '/api/rooms/:code/leave', handler: rooms.postLeave },
 

@@ -8,6 +8,7 @@ import type {
   PlayerRecord,
   RateLimitStore,
   RoomRecord,
+  RoundProgressRecord,
   RoomStore,
   RoomTx,
   Store,
@@ -297,6 +298,7 @@ interface RoomState {
   room: RoomRecord
   players: Map<string, PlayerRecord>
   assignments: Map<string, AssignmentRecord>
+  roundProgress: Map<string, RoundProgressRecord>
   notes: Map<string, string>
 }
 
@@ -326,7 +328,13 @@ class MemoryRoomStore implements RoomStore {
         return byCode.has(code)
       },
       async insertRoom(room) {
-        rooms.set(room.id, { room, players: new Map(), assignments: new Map(), notes: new Map() })
+        rooms.set(room.id, {
+          room,
+          players: new Map(),
+          assignments: new Map(),
+          roundProgress: new Map(),
+          notes: new Map(),
+        })
         byCode.set(room.code, room.id)
       },
       async getRoomForUpdate(code) {
@@ -371,6 +379,9 @@ class MemoryRoomStore implements RoomStore {
               current.assignments.delete(assignmentKey)
             }
           }
+          for (const [progressKey, progress] of current.roundProgress) {
+            if (progress.playerId === playerId) current.roundProgress.delete(progressKey)
+          }
           for (const noteKey of [...current.notes.keys()]) {
             if (noteKey.endsWith(`:${playerId}`)) current.notes.delete(noteKey)
           }
@@ -409,6 +420,26 @@ class MemoryRoomStore implements RoomStore {
         }
         for (const noteKey of [...current.notes.keys()]) {
           if (noteKey.startsWith(`${roomId}:${roundNumber}:`)) current.notes.delete(noteKey)
+        }
+      },
+      async listRoundProgress(roomId, roundNumber) {
+        return [...state(roomId).roundProgress.values()]
+          .filter((progress) => progress.roundNumber === roundNumber)
+          .map((progress) => ({ ...progress }))
+      },
+      async replaceRoundProgress(roomId, roundNumber, records) {
+        const current = state(roomId)
+        for (const [progressKey, progress] of current.roundProgress) {
+          if (progress.roundNumber === roundNumber) current.roundProgress.delete(progressKey)
+        }
+        for (const record of records) {
+          current.roundProgress.set(key(roomId, roundNumber, record.playerId), { ...record })
+        }
+      },
+      async deleteRoundProgressForRound(roomId, roundNumber) {
+        const current = state(roomId)
+        for (const [progressKey, progress] of current.roundProgress) {
+          if (progress.roundNumber === roundNumber) current.roundProgress.delete(progressKey)
         }
       },
       async getNotes(roomId, playerId, roundNumber) {

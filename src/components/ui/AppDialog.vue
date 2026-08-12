@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, ref, useId, watch } from 'vue'
 
 /**
  * Modaler Dialog auf Basis von `<dialog>`: bekommt Fokusfalle, Escape und
@@ -9,6 +9,7 @@ const props = defineProps<{ open: boolean; title?: string; dismissible?: boolean
 const emit = defineEmits<{ close: [] }>()
 
 const el = ref<HTMLDialogElement | null>(null)
+const titleId = useId()
 
 watch(
   () => props.open,
@@ -30,9 +31,15 @@ onBeforeUnmount(() => el.value?.close())
 </script>
 
 <template>
-  <dialog ref="el" class="dialog" @cancel="onCancel" @close="emit('close')">
+  <dialog
+    ref="el"
+    class="dialog"
+    :aria-labelledby="title ? titleId : undefined"
+    @cancel="onCancel"
+    @close="emit('close')"
+  >
     <div class="dialog__inner">
-      <h2 v-if="title" class="dialog__title">{{ title }}</h2>
+      <h2 v-if="title" :id="titleId" class="dialog__title">{{ title }}</h2>
       <div class="dialog__body"><slot /></div>
       <div class="dialog__actions"><slot name="actions" /></div>
     </div>

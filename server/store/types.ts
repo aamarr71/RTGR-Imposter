@@ -166,6 +166,19 @@ export interface AssignmentRecord {
   term: string
 }
 
+/** Vergabezustand eines Spielers innerhalb genau einer „Wer bin ich?“-Runde. */
+export interface RoundProgressRecord {
+  roomId: string
+  roundNumber: number
+  playerId: string
+  /** Eindeutige Revision der aktuellen Spieler-Meldung (ABA-Schutz). */
+  claimId: string | null
+  claimRequestedAt: number | null
+  placement: number | null
+  approvedAt: number | null
+  automatic: boolean
+}
+
 /** Transaktionale Sicht auf einen Raum. Alle Methoden laufen in einer Transaktion. */
 export interface RoomTx {
   codeExists(code: string): Promise<boolean>
@@ -187,6 +200,15 @@ export interface RoomTx {
   upsertAssignment(assignment: AssignmentRecord): Promise<void>
   deleteAssignment(roomId: string, roundNumber: number, authorPlayerId: string): Promise<void>
   deleteAssignmentsForRound(roomId: string, roundNumber: number): Promise<void>
+
+  listRoundProgress(roomId: string, roundNumber: number): Promise<RoundProgressRecord[]>
+  /** Ersetzt den gesamten Rundenstand atomar; maximal 20 kleine Datensätze. */
+  replaceRoundProgress(
+    roomId: string,
+    roundNumber: number,
+    records: RoundProgressRecord[],
+  ): Promise<void>
+  deleteRoundProgressForRound(roomId: string, roundNumber: number): Promise<void>
 
   getNotes(roomId: string, playerId: string, roundNumber: number): Promise<string>
   setNotes(roomId: string, playerId: string, roundNumber: number, content: string): Promise<void>

@@ -222,8 +222,39 @@ export const de = {
   'whoami.game.notesSaved': 'Gespeichert',
   'whoami.game.notesPending': 'Wird gespeichert …',
   'whoami.game.endRound': 'Runde beenden',
+  'whoami.game.endRoundEarly': 'Runde vorzeitig beenden',
   'whoami.game.endRoundConfirm': 'Runde für alle beenden?',
   'whoami.game.round': 'Runde {number}',
+
+  'whoami.ranking.yourStatus': 'Dein Status',
+  'whoami.ranking.claim': 'Erraten',
+  'whoami.ranking.claimHint':
+    'Wenn du deine Identität kennst, melde „Erraten“. Dein Platz steht erst nach der Bestätigung durch den Host fest.',
+  'whoami.ranking.waiting': 'Erraten gemeldet – wartet auf die Bestätigung des Hosts.',
+  'whoami.ranking.youPlaced': 'Bestätigt: Du bist auf Platz {place}.',
+  'whoami.ranking.youPlacedAutomatic':
+    'Du warst die letzte noch aktive Person und erhältst automatisch Platz {place}.',
+  'whoami.ranking.active': 'Noch dabei',
+  'whoami.ranking.pending': 'Bestätigung offen',
+  'whoami.ranking.place': '{place}. Platz',
+  'whoami.ranking.placeAutomatic': '{place}. Platz · automatisch',
+  'whoami.ranking.pendingTitle': 'Offene Bestätigungen',
+  'whoami.ranking.pendingCount': 'Warten: {count}',
+  'whoami.ranking.pendingAnnounced': '{name} hat Erraten gemeldet.',
+  'whoami.ranking.pendingAnnouncedMany': '{count} neue Erraten-Meldungen.',
+  'whoami.ranking.approvedAnnounced': 'Erraten von {name} wurde bestätigt.',
+  'whoami.ranking.rejectedAnnounced': 'Meldung von {name} wurde abgelehnt.',
+  'whoami.ranking.approve': 'Bestätigen',
+  'whoami.ranking.reject': 'Ablehnen',
+  'whoami.ranking.approveFor': 'Erraten von {name} bestätigen',
+  'whoami.ranking.rejectFor': 'Meldung von {name} ablehnen',
+  'whoami.ranking.title': 'Platzierung',
+  'whoami.ranking.complete': 'Die Platzierung dieser Runde ist vollständig.',
+  'whoami.ranking.automatic': 'automatisch',
+  'whoami.ranking.reset': 'Zurücknehmen',
+  'whoami.ranking.resetFor': 'Platzierung von {name} zurücknehmen',
+  'whoami.ranking.resetConfirm':
+    'Platzierung von {name} zurücknehmen? Nachfolgende Plätze werden neu nummeriert.',
 
   'whoami.end.title': 'Runde beendet',
   'whoami.end.again': 'Neue Runde mit derselben Sitzordnung',
@@ -246,6 +277,17 @@ export const de = {
   'whoami.error.room_closed': 'Der Raum wurde geschlossen.',
   'whoami.error.conflict': 'Da war jemand schneller. Bitte noch einmal versuchen.',
   'whoami.error.term_invalid': 'Bitte einen Begriff mit 1 bis {max} Zeichen eingeben.',
+  'whoami.error.not_playing': 'Diese Aktion ist nur während einer laufenden Runde möglich.',
+  'whoami.error.round_in_progress':
+    'Während der laufenden Runde bleibt dein Platz bestehen. Der Host kann die Runde zuerst beenden.',
+  'whoami.error.placement_already_finished': 'Deine Platzierung steht bereits fest.',
+  'whoami.error.placement_not_pending': 'Diese Person wartet nicht auf eine Bestätigung.',
+  'whoami.error.placement_automatic':
+    'Der automatische letzte Platz folgt aus den übrigen Platzierungen.',
+  'whoami.error.placement_claim_missing': 'Diese Erraten-Meldung ist unvollständig. Bitte neu laden.',
+  'whoami.error.placement_claim_stale':
+    'Diese Erraten-Meldung wurde inzwischen geändert. Bitte erneut versuchen.',
+  'whoami.error.network': 'Keine Verbindung zum Server. Bitte erneut versuchen.',
   'whoami.hostTransferred': 'Du bist jetzt Host.',
 
   /* ---------------- Wortvorschläge ---------------- */

@@ -86,6 +86,16 @@ export const roomApi = {
   resetSubmission: (m: Membership, playerId: string) =>
     http.post<RoomView>(`/rooms/${m.code}/reset-submission`, { playerId }, authHeaders(m)),
   start: (m: Membership) => http.post<RoomView>(`/rooms/${m.code}/start`, {}, authHeaders(m)),
+  requestPlacement: (m: Membership) =>
+    http.post<RoomView>(`/rooms/${m.code}/placement`, {}, authHeaders(m)),
+  approvePlacement: (m: Membership, playerId: string, claimId: string) =>
+    http.post<RoomView>(
+      `/rooms/${m.code}/placements/${playerId}/approve`,
+      { claimId },
+      authHeaders(m),
+    ),
+  resetPlacement: (m: Membership, playerId: string, claimId: string) =>
+    http.delete<RoomView>(`/rooms/${m.code}/placements/${playerId}`, { claimId }, authHeaders(m)),
   end: (m: Membership) => http.post<RoomView>(`/rooms/${m.code}/end`, {}, authHeaders(m)),
   leave: (m: Membership) => http.post<void>(`/rooms/${m.code}/leave`, {}, authHeaders(m)),
   close: (m: Membership) => http.delete<void>(`/rooms/${m.code}`, undefined, authHeaders(m)),

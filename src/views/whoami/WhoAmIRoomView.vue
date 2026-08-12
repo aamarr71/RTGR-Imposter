@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import GameBoard from '@/components/whoami/GameBoard.vue'
 import NotesPanel from '@/components/whoami/NotesPanel.vue'
@@ -17,6 +17,7 @@ import { WHO_AM_I } from '@shared/config'
 import { normalizeRoomCode } from '@shared/validation'
 import { roomDeepLink } from '@/config/runtime'
 import { useRoomStore } from '@/stores/room'
+import type { RoomBoardEntry } from '@shared/types'
 
 /**
  * Der Raum in allen Phasen: Lobby mit Sitzordnung und Begriffseingabe,
@@ -31,8 +32,27 @@ const view = computed(() => room.view)
 const showQr = ref(true)
 const termDraft = ref('')
 const editingTerm = ref(false)
-const confirm = ref<{ title: string; action: () => void } | null>(null)
+type ConfirmationAction = () => boolean | void | Promise<boolean | void>
+
+const confirm = ref<{ title: string; action: ConfirmationAction } | null>(null)
+const confirmBusy = ref(false)
 const copied = ref(false)
+const roomRoot = ref<HTMLElement | null>(null)
+const approvalHeading = ref<HTMLElement | null>(null)
+const approvalAnnouncement = ref('')
+
+const selfBoardEntry = computed(() => view.value?.board?.find((entry) => entry.isSelf) ?? null)
+const pendingPlayers = computed(() =>
+  (view.value?.board ?? []).filter((entry) => entry.roundState === 'pending'),
+)
+const ranking = computed(() =>
+  (view.value?.board ?? [])
+    .filter((entry): entry is RoomBoardEntry & { placement: number } => entry.placement !== null)
+    .sort((a, b) => a.placement - b.placement),
+)
+const rankingComplete = computed(
+  () => (view.value?.board?.length ?? 0) > 0 && ranking.value.length === view.value?.board?.length,
+)
 
 const canStart = computed(
   () =>
@@ -90,9 +110,25 @@ watch(
   },
 )
 
+watch(
+  () => pendingPlayers.value.map((player) => player.playerId),
+  (current, previous) => {
+    const previousIds = new Set(previous ?? [])
+    const added = pendingPlayers.value.filter((player) => !previousIds.has(player.playerId))
+    if (added.length === 1) {
+      approvalAnnouncement.value = t('whoami.ranking.pendingAnnounced', {
+        name: added[0]!.name,
+      })
+    } else if (added.length > 1) {
+      approvalAnnouncement.value = t('whoami.ranking.pendingAnnouncedMany', {
+        count: added.length,
+      })
+    }
+  },
+)
+
 async function submitTerm() {
-  await room.submitTerm(termDraft.value)
-  editingTerm.value = false
+  if (await room.submitTerm(termDraft.value)) editingTerm.value = false
 }
 
 async function copyLink() {
@@ -105,28 +141,92 @@ async function copyLink() {
   }
 }
 
-function ask(title: string, action: () => void) {
+function ask(title: string, action: ConfirmationAction) {
   confirm.value = { title, action }
 }
 
-function runConfirmed() {
-  confirm.value?.action()
-  confirm.value = null
+async function runConfirmed() {
+  const current = confirm.value
+  if (!current || confirmBusy.value) return
+  confirmBusy.value = true
+  try {
+    const succeeded = await current.action()
+    // Store-Aktionen liefern `false`, wenn der Server abgelehnt hat oder eine
+    // andere Aktion noch lief. In diesem Fall bleibt die Rückfrage offen.
+    if (succeeded !== false && confirm.value === current) confirm.value = null
+  } catch {
+    // Unerwartete Fehler schließen den Dialog ebenfalls nicht blind.
+  } finally {
+    confirmBusy.value = false
+  }
 }
 
-async function leaveRoom() {
-  await room.leave()
-  void router.replace({ name: 'home' })
+function closeConfirmation() {
+  if (!confirmBusy.value) confirm.value = null
 }
 
-async function closeRoom() {
+async function leaveRoom(): Promise<boolean> {
+  const left = await room.leave()
+  if (left) void router.replace({ name: 'home' })
+  return left
+}
+
+async function closeRoom(): Promise<boolean> {
   await room.close()
   void router.replace({ name: 'home' })
+  return true
+}
+
+function focusAfterModeration(previousIndex: number) {
+  const nextPlayer = pendingPlayers.value[Math.min(previousIndex, pendingPlayers.value.length - 1)]
+  if (nextPlayer) {
+    const rows = roomRoot.value?.querySelectorAll<HTMLElement>('[data-approval-player]') ?? []
+    const row = [...rows].find(
+      (candidate) => candidate.dataset.approvalPlayer === nextPlayer.playerId,
+    )
+    row?.querySelector<HTMLButtonElement>('button')?.focus()
+    return
+  }
+  approvalHeading.value?.focus()
+}
+
+async function decidePlacement(entry: RoomBoardEntry, approve: boolean): Promise<boolean> {
+  if (!entry.placementClaimId) return false
+  const previousIndex = pendingPlayers.value.findIndex(
+    (candidate) => candidate.playerId === entry.playerId,
+  )
+  const succeeded = approve
+    ? await room.approvePlacement(entry.playerId, entry.placementClaimId)
+    : await room.resetPlacement(entry.playerId, entry.placementClaimId)
+  if (!succeeded) return false
+
+  approvalAnnouncement.value = t(
+    approve ? 'whoami.ranking.approvedAnnounced' : 'whoami.ranking.rejectedAnnounced',
+    { name: entry.name },
+  )
+  await nextTick()
+  focusAfterModeration(Math.max(previousIndex, 0))
+  return true
+}
+
+function approvePlacement(entry: RoomBoardEntry) {
+  void decidePlacement(entry, true)
+}
+
+function rejectPlacement(entry: RoomBoardEntry) {
+  void decidePlacement(entry, false)
+}
+
+function askPlacementReset(entry: RoomBoardEntry) {
+  if (!entry.placementClaimId) return
+  ask(t('whoami.ranking.resetConfirm', { name: entry.name }), () => {
+    return room.resetPlacement(entry.playerId, entry.placementClaimId!)
+  })
 }
 </script>
 
 <template>
-  <main class="page room">
+  <main ref="roomRoot" class="page room">
     <AppHeader
       :title="t('whoami.game.title')"
       :subtitle="t('whoami.lobby.room', { code })"
@@ -145,6 +245,9 @@ async function closeRoom() {
     </StatusNote>
     <StatusNote v-else-if="!room.connected" tone="warn" icon="wifi-off">
       {{ t('whoami.conn.lost') }}
+    </StatusNote>
+    <StatusNote v-if="room.actionError" tone="error" icon="alert">
+      {{ tDynamic(`whoami.error.${room.actionError}`, undefined, t('common.error')) }}
     </StatusNote>
 
     <template v-if="view">
@@ -244,7 +347,101 @@ async function closeRoom() {
       <template v-else-if="view.phase === 'playing'">
         <p class="room__round">{{ t('whoami.game.round', { number: view.roundNumber }) }}</p>
 
+        <AppCard :title="t('whoami.ranking.yourStatus')">
+          <template v-if="selfBoardEntry?.roundState === 'active'">
+            <p class="room__hint">{{ t('whoami.ranking.claimHint') }}</p>
+            <AppButton block :loading="room.busy" @click="room.requestPlacement()">
+              <template #icon><AppIcon name="check" :size="18" /></template>
+              {{ t('whoami.ranking.claim') }}
+            </AppButton>
+          </template>
+          <StatusNote
+            v-else-if="selfBoardEntry?.roundState === 'pending'"
+            tone="warn"
+            icon="clock"
+            aria-live="polite"
+          >
+            {{ t('whoami.ranking.waiting') }}
+          </StatusNote>
+          <StatusNote v-else-if="selfBoardEntry?.placement" tone="success" icon="check" aria-live="polite">
+            {{
+              t(
+                selfBoardEntry.placementAutomatic
+                  ? 'whoami.ranking.youPlacedAutomatic'
+                  : 'whoami.ranking.youPlaced',
+                { place: selfBoardEntry.placement },
+              )
+            }}
+          </StatusNote>
+        </AppCard>
+
         <GameBoard :entries="view.board ?? []" />
+
+        <section v-if="room.isHost">
+          <h2 ref="approvalHeading" class="sr-only" tabindex="-1">
+            {{ t('whoami.ranking.pendingTitle') }}
+          </h2>
+          <p class="sr-only" aria-live="polite" aria-atomic="true">
+            {{ approvalAnnouncement }}
+          </p>
+          <AppCard
+            v-if="pendingPlayers.length > 0"
+            :title="t('whoami.ranking.pendingTitle')"
+            :hint="t('whoami.ranking.pendingCount', { count: pendingPlayers.length })"
+          >
+            <ul class="approvalList">
+              <li
+                v-for="player in pendingPlayers"
+                :key="player.playerId"
+                class="approvalList__row"
+                :data-approval-player="player.playerId"
+              >
+                <span class="approvalList__name">{{ player.name }}</span>
+                <div class="approvalList__actions">
+                  <AppButton
+                    :disabled="room.busy || !player.placementClaimId"
+                    :aria-label="t('whoami.ranking.approveFor', { name: player.name })"
+                    @click="approvePlacement(player)"
+                  >
+                    {{ t('whoami.ranking.approve') }}
+                  </AppButton>
+                  <AppButton
+                    variant="ghost"
+                    :disabled="room.busy || !player.placementClaimId"
+                    :aria-label="t('whoami.ranking.rejectFor', { name: player.name })"
+                    @click="rejectPlacement(player)"
+                  >
+                    {{ t('whoami.ranking.reject') }}
+                  </AppButton>
+                </div>
+              </li>
+            </ul>
+          </AppCard>
+        </section>
+
+        <AppCard v-if="ranking.length > 0" :title="t('whoami.ranking.title')">
+          <StatusNote v-if="rankingComplete" tone="success" icon="check">
+            {{ t('whoami.ranking.complete') }}
+          </StatusNote>
+          <ol class="rankingList">
+            <li v-for="entry in ranking" :key="entry.playerId" class="rankingList__row">
+              <span class="rankingList__place">{{ entry.placement }}.</span>
+              <span class="rankingList__name">{{ entry.name }}</span>
+              <span v-if="entry.placementAutomatic" class="rankingList__auto">
+                {{ t('whoami.ranking.automatic') }}
+              </span>
+              <AppButton
+                v-if="room.isHost && !entry.placementAutomatic"
+                variant="ghost"
+                :disabled="room.busy || !entry.placementClaimId"
+                :aria-label="t('whoami.ranking.resetFor', { name: entry.name })"
+                @click="askPlacementReset(entry)"
+              >
+                {{ t('whoami.ranking.reset') }}
+              </AppButton>
+            </li>
+          </ol>
+        </AppCard>
 
         <NotesPanel :model-value="view.notes" @save="room.saveNotes($event)" />
 
@@ -252,9 +449,11 @@ async function closeRoom() {
           v-if="room.isHost"
           variant="secondary"
           block
+          :disabled="room.busy || confirmBusy"
+          :loading="room.busy"
           @click="ask(t('whoami.game.endRoundConfirm'), () => room.endRound())"
         >
-          {{ t('whoami.game.endRound') }}
+          {{ rankingComplete ? t('whoami.game.endRound') : t('whoami.game.endRoundEarly') }}
         </AppButton>
       </template>
     </template>
@@ -271,10 +470,14 @@ async function closeRoom() {
       {{ t('whoami.entry.title') }}
     </AppButton>
 
-    <AppDialog :open="!!confirm" :title="confirm?.title" @close="confirm = null">
+    <AppDialog :open="!!confirm" :title="confirm?.title" @close="closeConfirmation">
       <template #actions>
-        <AppButton variant="danger" block @click="runConfirmed">{{ t('common.confirm') }}</AppButton>
-        <AppButton variant="ghost" block @click="confirm = null">{{ t('common.cancel') }}</AppButton>
+        <AppButton variant="danger" block :loading="confirmBusy || room.busy" @click="runConfirmed">
+          {{ t('common.confirm') }}
+        </AppButton>
+        <AppButton variant="ghost" block :disabled="confirmBusy" @click="closeConfirmation">
+          {{ t('common.cancel') }}
+        </AppButton>
       </template>
     </AppDialog>
   </main>
@@ -344,5 +547,74 @@ async function closeRoom() {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--c-text-dim);
+}
+
+.approvalList,
+.rankingList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.approvalList__row,
+.rankingList__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--touch);
+  padding: var(--s-2);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+.approvalList__name,
+.rankingList__name {
+  min-width: 0;
+  flex: 1;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.approvalList__actions {
+  display: flex;
+  gap: var(--s-1);
+}
+
+.rankingList__place {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  font-weight: 850;
+  color: #04120f;
+  background: var(--c-success);
+  border-radius: 10px;
+}
+
+.rankingList__auto {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+@media (max-width: 380px) {
+  .approvalList__row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .approvalList__actions > * {
+    flex: 1;
+  }
+
+  .rankingList__row {
+    flex-wrap: wrap;
+  }
+
+  .rankingList__row > .btn {
+    margin-left: 40px;
+  }
 }
 </style>

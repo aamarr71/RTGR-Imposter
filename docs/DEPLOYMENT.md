@@ -52,6 +52,11 @@ npm run db:seed       # 350 Begriffe, idempotent
 npm run db:status     # zur Kontrolle
 ```
 
+**Reihenfolge ist verpflichtend:** Migration `0002_whoami_round_rankings.sql`
+muss vor dem Deployment dieser Serverversion als angewendet (`✔`) erscheinen.
+Andernfalls verweigert `/api/health` den Bereitschaftsstatus; so kann ein Build
+ohne Ranking-Tabelle nicht unbemerkt live gehen.
+
 ---
 
 ## 3. Umgebungsvariablen setzen
@@ -107,7 +112,10 @@ auf.
 2. **Impostor** mit drei Namen durchspielen – Swipe-Aufdeckung, Timer, Aufdecken.
 3. **Wer bin ich?**: auf einem Gerät Raum erstellen, mit drei weiteren Geräten
    oder Tabs über QR-Code beitreten, Begriffe eingeben, starten. Jeder muss bei
-   sich selbst „find es raus du bot“ sehen.
+   sich selbst „find es raus du bot“ sehen. Danach auf mehreren Geräten
+   „Erraten“ melden, als Host in unterschiedlicher Reihenfolge bestätigen und
+   prüfen: lückenlose Plätze, automatischer letzter Platz und eine sauber
+   nachrückende Rangfolge nach „Zurücknehmen“.
 4. **PWA installieren**: iOS über Teilen → Zum Home-Bildschirm, Android über
    Menü → App installieren.
 5. **`/admin`** aufrufen und anmelden.

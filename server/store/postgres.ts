@@ -8,6 +8,7 @@ import type {
   PlayerRecord,
   RateLimitStore,
   RoomRecord,
+  RoundProgressRecord,
   RoomStore,
   RoomTx,
   Store,
@@ -743,6 +744,76 @@ function createRoomTx(client: PoolClient): RoomTx {
       ])
     },
 
+    async listRoundProgress(roomId, roundNumber) {
+      const result = await client.query<{
+        room_id: string
+        round_number: number
+        player_id: string
+        claim_id: string | null
+        claim_requested_at: Date | null
+        placement: number | null
+        approved_at: Date | null
+        automatic: boolean
+      }>(
+        `select room_id, round_number, player_id, claim_id, claim_requested_at,
+                placement, approved_at, automatic
+         from whoami_round_progress
+         where room_id = $1 and round_number = $2
+         order by placement nulls last, claim_requested_at nulls last, player_id`,
+        [roomId, roundNumber],
+      )
+      return result.rows.map<RoundProgressRecord>((row) => ({
+        roomId: row.room_id,
+        roundNumber: row.round_number,
+        playerId: row.player_id,
+        claimId: row.claim_id,
+        claimRequestedAt: row.claim_requested_at?.getTime() ?? null,
+        placement: row.placement,
+        approvedAt: row.approved_at?.getTime() ?? null,
+        automatic: row.automatic,
+      }))
+    },
+
+    async replaceRoundProgress(roomId, roundNumber, records) {
+      // Löschen und Neuaufbau geschehen innerhalb derselben, über die Raumzeile
+      // serialisierten Transaktion. So kann eine Korrektur mehrere Plätze
+      // lückenlos verschieben, ohne vorübergehend gegen den Unique-Index zu laufen.
+      await client.query(
+        'delete from whoami_round_progress where room_id = $1 and round_number = $2',
+        [roomId, roundNumber],
+      )
+      for (const record of records) {
+        await client.query(
+          `insert into whoami_round_progress
+             (room_id, round_number, player_id, claim_id, claim_requested_at, placement, approved_at, automatic)
+           values (
+             $1, $2, $3, $4,
+             case when $5::bigint is null then null else to_timestamp($5 / 1000.0) end,
+             $6,
+             case when $7::bigint is null then null else to_timestamp($7 / 1000.0) end,
+             $8
+           )`,
+          [
+            roomId,
+            roundNumber,
+            record.playerId,
+            record.claimId,
+            record.claimRequestedAt,
+            record.placement,
+            record.approvedAt,
+            record.automatic,
+          ],
+        )
+      }
+    },
+
+    async deleteRoundProgressForRound(roomId, roundNumber) {
+      await client.query(
+        'delete from whoami_round_progress where room_id = $1 and round_number = $2',
+        [roomId, roundNumber],
+      )
+    },
+
     async getNotes(roomId, playerId, roundNumber) {
       const result = await client.query<{ content: string }>(
         'select content from player_private_notes where room_id = $1 and player_id = $2 and round_number = $3',
@@ -954,6 +1025,10 @@ export function createPostgresStore(): Store {
     admin: new PgAdminStore(),
     async healthCheck() {
       await query('select 1')
+      // Die Anwendung liest den Rundenfortschritt bereits beim ersten
+      // Raum-GET. Deshalb darf ein Deployment mit noch nicht angewendeter
+      // Ranking-Migration nicht irreführend als gesund gemeldet werden.
+      await query('select claim_id, placement, automatic from whoami_round_progress limit 0')
     },
   }
 }

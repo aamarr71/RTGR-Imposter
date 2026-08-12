@@ -112,7 +112,10 @@ Hostaktionen können sich damit nicht überholen. Jede Mutation erhöht
 Transaktionen über eine Promise-Kette – dieselbe Semantik.
 
 Sitznummern haben eine `deferrable initially deferred` Unique-Bedingung, damit
-mehrere Zeilen innerhalb einer Transaktion ihre Nummer tauschen können.
+mehrere Zeilen innerhalb einer Transaktion ihre Nummer tauschen können. Die
+Platzierungen einer Runde besitzen zusätzlich einen partiellen Unique-Index;
+Korrekturen ersetzen den kleinen Rundenstand innerhalb desselben Raum-Locks
+vollständig. Parallele Bestätigungen können daher nie denselben Platz erhalten.
 
 ### Realtime als Polling
 
@@ -146,8 +149,8 @@ Raumversion nicht – sie lösen bei niemandem sonst ein Update aus.
   Payload-Feldern. Freitext, Namen und Begriffe werden serverseitig verworfen,
   selbst wenn ein manipulierter Client sie mitschickt.
 - Geräte- und IP-Kennungen werden mit `SESSION_SECRET` gepfeffert gehasht.
-- Wer-bin-ich-Begriffe und Notizen werden beim Rundenende gelöscht, spätestens
-  mit dem Raum.
+- Wer-bin-ich-Begriffe, Notizen und Rundenplatzierungen werden beim Rundenende
+  gelöscht, spätestens mit dem Raum.
 - Analytics werden **nie** automatisch gelöscht – nur manuell durch den Admin und
   nur mit ausdrücklicher Bestätigung.
 - `room_events` protokolliert Ereignistypen, niemals Inhalte.
@@ -174,8 +177,17 @@ IP-Schlüssel –, sodass ein neuer Inkognito-Tab nichts bringt.
    abgegeben. Erst danach werden Begriffe sichtbar.
 6. Jeder Client pollt `GET /api/rooms/:code` und bekommt eine für ihn gefilterte
    Sicht.
-7. `POST /api/rooms/:code/end` beendet die Runde, löscht Begriffe und Notizen der
-   Runde und öffnet die Lobby für die nächste.
+7. Wer seine Identität erraten hat, meldet das selbst über
+   `POST /api/rooms/:code/placement`. Nur der Host bestätigt offene Meldungen.
+   Der Server vergibt im Raum-Lock lückenlose Plätze; bei `N - 1` Bestätigungen
+   erhält der letzte aktive Spieler automatisch Platz `N`.
+8. Der Host kann eine offene Meldung ablehnen oder eine explizite Platzierung
+   zurücknehmen. Spätere Plätze rücken serverseitig auf, ein automatischer letzter
+   Platz wird dabei neu berechnet. Jede Hostentscheidung ist an die vom Server
+   erzeugte ID genau dieser Meldung gebunden; ein verspäteter Klick kann dadurch
+   keine später neu eingereichte Meldung treffen.
+9. `POST /api/rooms/:code/end` beendet die Runde, löscht Begriffe, Notizen und
+   Platzierungen der Runde und öffnet die Lobby für die nächste.
 
 ## Aufräumen
 

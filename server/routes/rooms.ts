@@ -111,6 +111,45 @@ export const postResetSubmission: Handler = async (req) => {
 export const postStart: Handler = async (req) =>
   json(await rooms.startRound(getStore().rooms, code(req), actor(req)))
 
+export const postPlacementRequest: Handler = async (req) =>
+  json(await rooms.requestPlacement(getStore().rooms, code(req), actor(req)))
+
+function targetPlayerId(req: ApiRequest): string {
+  const targetId = req.params.playerId
+  if (!targetId) throw fail.badRequest('player_missing', 'Spieler fehlt.')
+  return targetId
+}
+
+function placementClaimId(req: ApiRequest): string {
+  const { claimId } = body<{ claimId: string }>(req)
+  if (typeof claimId !== 'string' || claimId.length < 1 || claimId.length > 64) {
+    throw fail.badRequest('placement_claim_missing', 'Meldungs-ID fehlt.')
+  }
+  return claimId
+}
+
+export const postPlacementApproval: Handler = async (req) =>
+  json(
+    await rooms.approvePlacement(
+      getStore().rooms,
+      code(req),
+      actor(req),
+      targetPlayerId(req),
+      placementClaimId(req),
+    ),
+  )
+
+export const deletePlacement: Handler = async (req) =>
+  json(
+    await rooms.resetPlacement(
+      getStore().rooms,
+      code(req),
+      actor(req),
+      targetPlayerId(req),
+      placementClaimId(req),
+    ),
+  )
+
 export const postEnd: Handler = async (req) =>
   json(await rooms.endRound(getStore().rooms, code(req), actor(req)))
 
