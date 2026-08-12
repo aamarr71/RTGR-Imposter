@@ -56,6 +56,7 @@ function playingView(isHost: boolean): RoomView {
       playerId: 'tom',
       name: 'Tom',
       seat: 2,
+      term: 'Albert Einstein',
       roundState: 'pending',
       placementClaimId: 'claim-tom',
     }),
@@ -63,6 +64,7 @@ function playingView(isHost: boolean): RoomView {
       playerId: 'mia',
       name: 'Mia',
       seat: 3,
+      term: 'Marie Curie',
       roundState: 'finished',
       placement: 1,
       placementClaimId: 'claim-mia',
@@ -255,6 +257,9 @@ describe('Wer-bin-ich-Platzierungsoberfläche', () => {
   it('kündigt Moderationsänderungen an und setzt den Fokus nach dem letzten Eintrag sicher', async () => {
     const wrapper = mountRoom(true)
     const room = mocks.room as ReturnType<typeof makeRoom>
+    expect(wrapper.text()).not.toContain('Albert Einstein')
+    expect(wrapper.text()).toContain('Marie Curie')
+
     room.approvePlacement.mockImplementation(async () => {
       const tom = room.view.board?.find((entry) => entry.playerId === 'tom')
       if (tom) {
@@ -268,9 +273,14 @@ describe('Wer-bin-ich-Platzierungsoberfläche', () => {
     await flushPromises()
     await nextTick()
 
-    expect(wrapper.get('[aria-live="polite"][aria-atomic="true"]').text()).toContain(
-      'Erraten von Tom wurde bestätigt',
-    )
+    expect(
+      wrapper
+        .findAll('[aria-live="polite"][aria-atomic="true"]')
+        .map((region) => region.text())
+        .join(' '),
+    ).toContain('Erraten von Tom wurde bestätigt')
+    expect(wrapper.text()).toContain('Albert Einstein')
+    expect(wrapper.find('button[data-term-player="tom"]').exists()).toBe(false)
     expect(document.activeElement).toBe(wrapper.get('h2.sr-only').element)
     wrapper.unmount()
   })

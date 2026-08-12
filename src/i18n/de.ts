@@ -216,6 +216,13 @@ export const de = {
   'whoami.game.title': 'Wer bin ich?',
   'whoami.game.you': 'Du',
   'whoami.game.ownTerm': WHO_AM_I.ownTermPlaceholder,
+  'whoami.game.termHidden': 'Verdeckt',
+  'whoami.game.revealTermFor': 'Begriff von {name} aufdecken',
+  'whoami.game.hideTermFor': 'Begriff von {name} wieder verdecken',
+  'whoami.game.termPermanentlyVisible':
+    'Begriff von {name} ist jetzt dauerhaft sichtbar: {term}.',
+  'whoami.game.termsPermanentlyVisible':
+    '{count} Begriffe sind jetzt dauerhaft sichtbar.',
   'whoami.game.notes': 'Meine Notizen',
   'whoami.game.notesPlaceholder': '- reale Person\n- männlich\n- kein Sportler',
   'whoami.game.notesPrivate': 'Nur du siehst diese Notizen. Auch der Host nicht.',
