@@ -40,6 +40,31 @@ importieren dieselben Funktionen. Damit kann die Konfigurationsseite dieselbe
 Prüfung anzeigen, die der Server verbindlich durchsetzt – ohne dass beide
 Fassungen auseinanderlaufen.
 
+### Deterministische PWA-Updates
+
+`services/appUpdate.ts` besitzt die Zustandsmaschine für Updates (`idle`,
+`checking`, verfügbar, verschoben, wird angewendet). `pwaUpdate.ts` übersetzt
+lediglich Workbox- und Browserereignisse in diese Zustände; Komponenten und
+Router aktivieren selbst keinen Worker und rufen keinen eigenen Reload auf.
+
+Der Worker bleibt im Prompt-Modus. Ein Update sendet daher erst dann
+`SKIP_WAITING`, wenn `updateSafety.ts` anhand von Router-Metadaten und dem echten
+`RoomView` einen sicheren Zustand erkennt. `clientsClaim` erzeugt nach der
+Aktivierung zuverlässig `controllerchange`. Mehrfache Ereignisse – auch aus
+anderen Tabs oder PWA-Fenstern – führen dank Controller- und
+`reloadCoordinator`-Sicherung höchstens zu einem Reload pro Dokument.
+
+Eine laufende „Wer bin ich?“-Runde, ein noch unbekannter Rejoin-Zustand und per
+`guardLeave` geschützte Impostor-Interaktionen verschieben den Reload. Lobby,
+Home, Ergebnisflächen und ein vollständiges Podium sind sicher. Die bestehende
+Lazy-Chunk-Recovery bleibt als Deployment-Fallback erhalten und teilt sich mit
+dem PWA-Flow dieselbe Reload-Sicherung.
+
+Die Cache-Grenze ist explizit: gehashte Assets und App-Shell werden vorgehalten,
+`/api/*` ist `NetworkOnly`. Nur `/api/terms` bleibt für den offline spielbaren
+Impostor-Modus `NetworkFirst`. `sw.js` wird von Vercel ohne Cache ausgeliefert,
+damit `registration.update()` zuverlässig den aktuellen Worker vergleicht.
+
 ### Ein Router für Dev und Produktion
 
 `server/router.ts` arbeitet auf Node-`IncomingMessage`/`ServerResponse`.

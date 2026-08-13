@@ -32,6 +32,13 @@ export const de = {
   'common.notFound': 'Diese Seite gibt es nicht.',
   'common.toHome': 'Zur Spielauswahl',
 
+  'update.title': 'Neue Version verfügbar',
+  'update.deferred':
+    'Nach dieser Runde aktualisieren wir automatisch. Jetzt aktualisieren lädt die App sofort neu.',
+  'update.ready': 'Die Aktualisierung ist bereit und lädt die App neu.',
+  'update.applying': 'Neue Version wird aktiviert …',
+  'update.now': 'Jetzt aktualisieren',
+
   'age.title': 'Kurz bestätigen',
   'age.body': 'Ich bestätige, dass ich mindestens 18 Jahre alt bin.',
   'age.hint':

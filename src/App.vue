@@ -1,20 +1,39 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AgeGate from '@/components/AgeGate.vue'
+import AppUpdateNotice from '@/components/AppUpdateNotice.vue'
 import { analytics, installAnalyticsLifecycle } from '@/services/analytics'
+import { appUpdateController } from '@/services/appUpdateState'
+import { isSafeForAppUpdate } from '@/services/updateSafety'
+import { useRoomStore } from '@/stores/room'
 import { useSettingsStore } from '@/stores/settings'
 
 const route = useRoute()
 const settings = useSettingsStore()
+const room = useRoomStore()
 
 /** Steuert die Akzentfarbe aller Komponenten innerhalb der aktiven Route. */
 const accent = computed(() => route.meta.accent ?? 'neutral')
+const updateIsSafe = computed(() =>
+  isSafeForAppUpdate({
+    routeName: route.name,
+    routeGuardsInteraction: Boolean(route.meta.guardLeave),
+    hasRoomMembership: room.membership !== null,
+    roomView: room.view,
+  }),
+)
+
+watch(updateIsSafe, (safe) => appUpdateController.setSafeToUpdate(safe), {
+  immediate: true,
+})
 
 onMounted(() => {
   installAnalyticsLifecycle()
   analytics.track('app_session_start')
 })
+
+onBeforeUnmount(() => appUpdateController.setSafeToUpdate(false))
 </script>
 
 <template>
@@ -25,6 +44,7 @@ onMounted(() => {
         <component :is="Component" />
       </Transition>
     </RouterView>
+    <AppUpdateNotice />
   </div>
 </template>
 

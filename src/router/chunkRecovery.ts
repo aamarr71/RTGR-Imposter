@@ -1,4 +1,5 @@
 import type { Router } from 'vue-router'
+import { requestDocumentReload } from '@/services/reloadCoordinator'
 
 /**
  * Ein Deployment kann die Hash-Namen lazy geladener Dateien austauschen,
@@ -135,7 +136,7 @@ function browserRuntime(): ChunkRecoveryRuntime {
       if (safeTarget !== currentBrowserPath()) {
         window.history.replaceState(window.history.state, '', safeTarget)
       }
-      window.location.reload()
+      requestDocumentReload()
     },
   }
 }

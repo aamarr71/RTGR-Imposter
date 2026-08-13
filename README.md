@@ -313,6 +313,21 @@ geladenen Wortpool. Fällt der Server aus, greift automatisch der lokale Cache
 und die Konfigurationsseite weist sichtbar darauf hin. „Wer bin ich?“ braucht
 naturgemäß eine Verbindung.
 
+### Updates nach einem Deployment
+
+Die App registriert neue Service Worker im Prompt-Modus und prüft beim Start,
+bei Rückkehr in den Vordergrund sowie alle 15 Minuten im sichtbaren Zustand auf
+einen neuen Build. Auf Home, in der Lobby und am vollständigen Podium wird er
+sofort aktiviert und die App genau einmal neu geladen. Während einer laufenden
+„Wer bin ich?“-Runde oder einer geschützten Impostor-Interaktion bleibt das
+Update vorgemerkt; eine dezente Meldung erlaubt die bewusste sofortige
+Aktualisierung, ansonsten folgt sie automatisch am nächsten sicheren Punkt.
+
+Nur App-Shell und statische Build-Assets liegen im Precache. Multiplayer- und
+Health-Endpunkte unter `/api/*` verwenden `NetworkOnly`; `/api/terms` bleibt die
+bewusste `NetworkFirst`-Ausnahme für den Offline-Wortpool. Der laufende Build ist
+unter Einstellungen als `package-version+commit` nachvollziehbar.
+
 ---
 
 ## Architektur
