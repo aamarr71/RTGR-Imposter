@@ -32,9 +32,9 @@ export type RoomStatus = 'idle' | 'loading' | 'ready' | 'denied' | 'error'
 /**
  * Zustand eines „Wer bin ich?“-Raums auf dem Gerät.
  *
- * Der Store hält bewusst nur die **serverseitig gefilterte** Sicht. Es gibt
- * keinen Codepfad, über den der eigene Begriff in den Client gelangen könnte –
- * er wird gar nicht erst ausgeliefert.
+ * Der Store hält bewusst nur die **serverseitig gefilterte** Sicht. Während
+ * des Ratens gelangt der eigene Begriff nicht in den Client; erst nach der
+ * vollständig feststehenden Rangfolge wird er für das Podium aufgedeckt.
  *
  * Der Store – nicht die Route – besitzt den laufenden `RoomSync`. Ansichten
  * melden mit `ensure()` nur an, welchen Raum sie brauchen, und geben ihn mit

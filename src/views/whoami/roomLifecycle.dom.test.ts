@@ -272,6 +272,7 @@ describe('Rückkehr in einen Raum', () => {
     expect(router.currentRoute.value.fullPath).toBe(`/room/${CODE}`)
     expect(useRoomStore().status).toBe('ready')
     expect(wrapper.text()).toContain('Lobby')
+    expect(wrapper.text()).toContain('Lena')
   })
 
   it('bleibt beim Direktaufruf während der ersten Abfrage im Raum', async () => {

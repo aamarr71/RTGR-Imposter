@@ -232,6 +232,10 @@ export function buildView(
   const ordered = [...players].sort(bySeat)
   const submitted = new Set(assignments.map((assignment) => assignment.authorPlayerId))
   const progressByPlayer = new Map(roundProgress.map((progress) => [progress.playerId, progress]))
+  const rankingComplete =
+    room.phase === 'playing' &&
+    ordered.length > 0 &&
+    ordered.every((player) => progressByPlayer.get(player.id)?.placement != null)
 
   const playerViews: RoomPlayerView[] = ordered.map((player) => ({
     id: player.id,
@@ -252,8 +256,12 @@ export function buildView(
       seat: player.seat,
       online: isOnline(player, now),
       isSelf: player.id === viewer.id,
-      // Kernregel: der eigene Begriff wird gar nicht erst mitgesendet.
-      term: player.id === viewer.id ? null : (termByTarget.get(player.id) ?? null),
+      // Während des Ratens bleibt der eigene Begriff vollständig serverseitig.
+      // Erst der gemeinsame Rundenabschluss deckt alle Begriffe für alle auf.
+      term:
+        player.id === viewer.id && !rankingComplete
+          ? null
+          : (termByTarget.get(player.id) ?? null),
       ...progressFields(progressByPlayer.get(player.id)),
     }))
   }

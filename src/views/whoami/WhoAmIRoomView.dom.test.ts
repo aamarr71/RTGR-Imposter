@@ -129,7 +129,7 @@ function automaticLastView(): RoomView {
       name: 'Noah',
       seat: 4,
       isSelf: true,
-      term: null,
+      term: 'Sherlock Holmes',
       roundState: 'finished',
       placement: 4,
       placementAutomatic: true,
@@ -139,6 +139,31 @@ function automaticLastView(): RoomView {
   view.you = { playerId: 'noah', name: 'Noah', seat: 4, isHost: false }
   view.board = board
   view.players = board.map((entry, index) => player(entry, index === 0))
+  return view
+}
+
+function completedHostView(): RoomView {
+  const view = automaticLastView()
+  view.you = { playerId: 'host', name: 'Lena', seat: 1, isHost: true }
+  view.board = view.board?.map((entry) => ({
+    ...entry,
+    isSelf: entry.playerId === 'host',
+    term:
+      entry.playerId === 'host'
+        ? 'Taylor Swift'
+        : entry.term,
+  })) ?? null
+  view.players = (view.board ?? []).map((entry, index) => player(entry, index === 0))
+  return view
+}
+
+function lobbyView(isHost: boolean): RoomView {
+  const view = playingView(isHost)
+  view.phase = 'lobby'
+  view.locked = false
+  view.board = null
+  view.assignmentTarget = { playerId: 'tom', name: 'Tom', seat: 2 }
+  view.submittedTerm = null
   return view
 }
 
@@ -198,21 +223,50 @@ describe('Wer-bin-ich-Platzierungsoberfläche', () => {
     wrapper.unmount()
   })
 
-  it('zeigt die gemeinsame Rangliste semantisch und markiert fertige Spieler', () => {
+  it('zeigt während der Runde keine Zwischenrangliste und markiert fertige Spieler ohne Platz', () => {
     const wrapper = mountRoom(true)
 
-    expect(wrapper.get('ol.rankingList').text()).toContain('1.')
-    expect(wrapper.get('ol.rankingList').text()).toContain('Mia')
+    expect(wrapper.find('ol.rankingList').exists()).toBe(false)
+    expect(wrapper.find('.roundResult').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('1. Platz')
+    expect(wrapper.text()).not.toContain('Dein Status')
+    expect(wrapper.text()).not.toContain('Platzierung')
     expect(wrapper.findAll('.board__row.is-finished')).toHaveLength(1)
     wrapper.unmount()
   })
 
-  it('erklärt dem letzten Spieler seinen automatisch vergebenen Platz korrekt', () => {
+  it('zeigt nach vollständiger Rangfolge automatisch das Podium ohne Techniklabels', () => {
     const wrapper = mountRoom(false, automaticLastView())
 
-    expect(wrapper.get('ol.rankingList').text()).toContain('automatisch')
-    expect(wrapper.text()).toContain('erhältst automatisch Platz 4')
-    expect(wrapper.findAll('.board__row.is-finished')).toHaveLength(4)
+    expect(wrapper.get('.roundResult__eyebrow').text()).toContain('Runde 1 beendet')
+    expect(wrapper.get('.roundResult__title').text()).toBe('Das Podium')
+    expect(wrapper.get('.podium__place--1 .podium__name').text()).toBe('Lena')
+    expect(wrapper.get('.podium__place--2 .podium__name').text()).toBe('Tom')
+    expect(wrapper.get('.podium__place--3 .podium__name').text()).toBe('Mia')
+    expect(wrapper.get('.resultList__row').text()).toContain('Sherlock Holmes')
+    expect(wrapper.text()).toContain('Warten auf den Host …')
+    expect(wrapper.text()).not.toContain('automatisch')
+    expect(wrapper.text()).not.toContain('Die Platzierung dieser Runde ist vollständig')
+    expect(wrapper.find('.board').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('gibt dem Host am Podium direkt die nächste Runde', async () => {
+    const wrapper = mountRoom(true, completedHostView())
+    const nextRound = wrapper.findAll('button').find((button) => button.text().includes('Nächste Runde'))
+
+    expect(nextRound).toBeDefined()
+    expect(wrapper.text()).not.toContain('Warten auf den Host …')
+    await nextRound!.trigger('click')
+    expect((mocks.room as ReturnType<typeof makeRoom>).endRound).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('verwendet in der Begriffseingabe nur den tatsächlichen Spielernamen', () => {
+    const wrapper = mountRoom(true, lobbyView(true))
+
+    expect(wrapper.text()).toContain('Gib einen Begriff für Tom ein.')
+    expect(wrapper.text()).not.toContain('Spieler 2')
     wrapper.unmount()
   })
 
@@ -315,7 +369,7 @@ describe('Wer-bin-ich-Platzierungsoberfläche', () => {
 
     expect(wrapper.find('[aria-label*="bestätigen"]').exists()).toBe(false)
     expect(wrapper.find('[aria-label*="zurücknehmen"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Erraten gemeldet')
+    expect(wrapper.text()).toContain('Wartet auf Bestätigung')
     wrapper.unmount()
   })
 })

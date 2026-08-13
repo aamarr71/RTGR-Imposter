@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import AppButton from '@/components/ui/AppButton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { t } from '@/i18n'
 import type { RoomBoardEntry } from '@shared/types'
@@ -11,7 +12,15 @@ import type { RoomBoardEntry } from '@shared/types'
  * ist keine CSS-Maskierung, sondern der einzige Wert, den dieser Client
  * überhaupt kennt.
  */
-const props = defineProps<{ entries: RoomBoardEntry[] }>()
+const props = withDefaults(
+  defineProps<{
+    entries: RoomBoardEntry[]
+    busy?: boolean
+  }>(),
+  { busy: false },
+)
+
+const emit = defineEmits<{ claim: [] }>()
 
 /**
  * Aufdeckungen bleiben bewusst innerhalb dieser Komponenteninstanz. Dadurch
@@ -21,7 +30,9 @@ const props = defineProps<{ entries: RoomBoardEntry[] }>()
 const revealedPlayerIds = ref(new Set<string>())
 const boardRoot = ref<HTMLElement | null>(null)
 const visibilityAnnouncement = ref('')
+const securedPlace = ref<number | null>(null)
 let visibilityAnnouncementEpoch = 0
+let securedPlaceTimer: ReturnType<typeof setTimeout> | null = null
 
 function canToggleTerm(entry: RoomBoardEntry): boolean {
   return !entry.isSelf && entry.roundState !== 'finished'
@@ -99,15 +110,48 @@ watch(
   },
 )
 
-function placementLabel(entry: RoomBoardEntry): string {
-  if (entry.roundState === 'finished' && entry.placement !== null) {
-    return entry.placementAutomatic
-      ? t('whoami.ranking.placeAutomatic', { place: entry.placement })
-      : t('whoami.ranking.place', { place: entry.placement })
+watch(
+  () => {
+    const self = props.entries.find((entry) => entry.isSelf)
+    return self
+      ? { playerId: self.playerId, roundState: self.roundState, placement: self.placement }
+      : null
+  },
+  (current, previous) => {
+    if (securedPlaceTimer) {
+      clearTimeout(securedPlaceTimer)
+      securedPlaceTimer = null
+    }
+
+    if (!current || current.roundState !== 'finished') {
+      securedPlace.value = null
+      return
+    }
+
+    if (
+      previous?.playerId === current.playerId &&
+      previous.roundState !== 'finished' &&
+      current.placement !== null
+    ) {
+      securedPlace.value = current.placement
+      securedPlaceTimer = setTimeout(() => {
+        securedPlace.value = null
+        securedPlaceTimer = null
+      }, 2400)
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  if (securedPlaceTimer) clearTimeout(securedPlaceTimer)
+})
+
+function selfProgressLabel(entry: RoomBoardEntry): string {
+  if (entry.roundState === 'pending') return t('whoami.ranking.waitingShort')
+  if (entry.roundState === 'finished' && securedPlace.value !== null) {
+    return t('whoami.ranking.placeSecured', { place: securedPlace.value })
   }
-  return entry.roundState === 'pending'
-    ? t('whoami.ranking.pending')
-    : t('whoami.ranking.active')
+  return t('whoami.ranking.done')
 }
 </script>
 
@@ -125,7 +169,8 @@ function placementLabel(entry: RoomBoardEntry): string {
     >
       <span class="board__seat">{{ entry.seat }}</span>
       <span class="board__name">
-        <span class="board__nameText">{{ entry.isSelf ? t('whoami.game.you') : entry.name }}</span>
+        <span class="board__nameText">{{ entry.name }}</span>
+        <span v-if="entry.isSelf" class="board__selfTag">{{ t('whoami.game.you') }}</span>
         <AppIcon v-if="!entry.online" name="wifi-off" :size="14" class="board__offline" />
       </span>
       <span v-if="entry.isSelf" class="board__term is-placeholder">
@@ -159,7 +204,26 @@ function placementLabel(entry: RoomBoardEntry): string {
       >
         {{ entry.term }}
       </span>
-      <span class="board__status">{{ placementLabel(entry) }}</span>
+      <div v-if="entry.isSelf" class="board__progress" aria-live="polite">
+        <AppButton
+          v-if="entry.roundState === 'active'"
+          class="board__claim"
+          size="sm"
+          :loading="busy"
+          @click="emit('claim')"
+        >
+          <template #icon><AppIcon name="check" :size="16" /></template>
+          {{ t('whoami.ranking.claim') }}
+        </AppButton>
+        <span
+          v-else
+          class="board__progressLabel"
+          :class="`is-${entry.roundState}`"
+        >
+          <AppIcon :name="entry.roundState === 'pending' ? 'clock' : 'check'" :size="14" />
+          {{ selfProgressLabel(entry) }}
+        </span>
+      </div>
     </li>
   </ul>
   <p
@@ -205,11 +269,6 @@ function placementLabel(entry: RoomBoardEntry): string {
   background: rgb(42 207 185 / 6%);
 }
 
-.board__row.is-finished .board__nameText {
-  color: var(--c-text-dim);
-  text-decoration: line-through;
-}
-
 .board__seat {
   display: flex;
   align-items: center;
@@ -234,6 +293,22 @@ function placementLabel(entry: RoomBoardEntry): string {
   min-width: 0;
   color: var(--c-text-muted);
   overflow-wrap: anywhere;
+}
+
+.board__nameText {
+  min-width: 0;
+}
+
+.board__selfTag {
+  flex: none;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  color: #c3aef5;
+  text-transform: uppercase;
+  border: 1px solid currentcolor;
+  border-radius: var(--r-pill);
 }
 
 .board__offline {
@@ -269,10 +344,16 @@ function placementLabel(entry: RoomBoardEntry): string {
   color: #c3aef5;
 }
 
-.board__status {
+.board__progress {
   grid-column: 2 / -1;
   justify-self: end;
-  padding: 3px 8px;
+}
+
+.board__progressLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
   font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--c-text-muted);
@@ -280,11 +361,11 @@ function placementLabel(entry: RoomBoardEntry): string {
   border-radius: var(--r-pill);
 }
 
-.is-pending .board__status {
+.board__progressLabel.is-pending {
   color: var(--c-warning);
 }
 
-.is-finished .board__status {
+.board__progressLabel.is-finished {
   color: var(--c-success);
 }
 
@@ -294,7 +375,7 @@ function placementLabel(entry: RoomBoardEntry): string {
   }
 
   .board__term,
-  .board__status {
+  .board__progress {
     grid-column: 2;
     justify-self: stretch;
     text-align: left;
@@ -304,7 +385,7 @@ function placementLabel(entry: RoomBoardEntry): string {
     justify-content: flex-start;
   }
 
-  .board__status {
+  .board__progress {
     justify-self: start;
   }
 }

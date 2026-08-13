@@ -232,7 +232,7 @@ Abgedeckt sind unter anderem:
 | Bereich | Beispiele |
 | --- | --- |
 | Impostor | 3–20 Spieler, doppelte Namen blockiert, ungültige Impostor-Anzahl blockiert, mindestens eine Kategorie, Hinweis an/aus, mehrere Impostor und gegenseitige Sichtbarkeit, Wiederholungen innerhalb der Sitzung, Timer startet erst beim Rundenstart, Timerzustand über Reload, Alarm deckt niemanden auf, Offline-Pool |
-| Wer bin ich | Raum erstellen/beitreten, doppelte Namen, 3–20 Spieler, Reorder und korrekte Kreiszuweisung, Host sieht keine Begriffe, jeder bearbeitet nur seine Eingabe, eigener Begriff wird serverseitig nicht ausgeliefert, Notizen privat, Rejoin, kein Beitritt nach Start, Hostübergabe nach fünf Minuten, alter Host bekommt die Rechte nicht zurück, Raumlöschung nach einer Stunde, laufende Räume bleiben, Analytics überleben die Raumlöschung |
+| Wer bin ich | Raum erstellen/beitreten, doppelte Namen, 3–20 Spieler, Reorder und korrekte Kreiszuweisung, Host sieht während des Ratens keine eigenen Begriffe, jeder bearbeitet nur seine Eingabe, vollständiges Podium deckt alle Begriffe auf, Notizen privat, Rejoin, kein Beitritt nach Start, Hostübergabe nach fünf Minuten, alter Host bekommt die Rechte nicht zurück, Raumlöschung nach einer Stunde, laufende Räume bleiben, Analytics überleben die Raumlöschung |
 | Admin | unauthentifizierter Zugriff blockiert, Wort-CRUD, Moderationsworkflow, Rate-Limit 10/Stunde, Analytics-Zeiträume, Löschen nur mit Bestätigung, keine privaten Spielinhalte in Analytics |
 
 Typecheck und Build gehören zur Abnahme:
@@ -344,10 +344,12 @@ Polling passt sein Intervall an (2 s aktiv, 10 s im Hintergrund, exponentiell
 nachlassend bei Fehlern) und ist gegen einen Push-Adapter tauschbar, ohne dass
 sich Views ändern.
 
-**Sicherheit:** Sensible Raumansichten werden serverseitig gefiltert. Der eigene
-Begriff wird bei „Wer bin ich?“ **gar nicht erst an den eigenen Client
-gesendet** – auch nicht an den Host. Rejoin-Tokens liegen nur gehasht in der
-Datenbank, der Raumcode allein genügt nie als Authentifizierung.
+**Sicherheit:** Sensible Raumansichten werden serverseitig gefiltert. Während
+des Ratens wird der eigene Begriff bei „Wer bin ich?“ **gar nicht erst an den
+eigenen Client gesendet** – auch nicht an den Host. Erst wenn alle Plätze
+feststehen, deckt der gemeinsame Rundenabschluss alle Begriffe auf.
+Rejoin-Tokens liegen nur gehasht in der Datenbank, der Raumcode allein genügt
+nie als Authentifizierung.
 
 ---
 

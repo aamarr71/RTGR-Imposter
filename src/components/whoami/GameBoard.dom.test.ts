@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RoomBoardEntry } from '@shared/types'
 import { WHO_AM_I } from '@shared/config'
 import GameBoard from './GameBoard.vue'
@@ -22,12 +22,16 @@ function entry(patch: Partial<RoomBoardEntry>): RoomBoardEntry {
 }
 
 describe('GameBoard-Rundenstatus', () => {
-  it('zeigt aktive, wartende und bestätigte Spieler mit ihrem Status', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('zeigt Fortschritt nur dezent an der eigenen Spielerkarte und keine Zwischenplätze', () => {
     const wrapper = mount(GameBoard, {
       props: {
         entries: [
           entry({ playerId: 'p1', name: 'Lena' }),
-          entry({ playerId: 'p2', name: 'Tom', seat: 2, roundState: 'pending' }),
+          entry({ playerId: 'p2', name: 'Tom', seat: 2, isSelf: true, term: null, roundState: 'pending' }),
           entry({
             playerId: 'p3',
             name: 'Mia',
@@ -47,11 +51,37 @@ describe('GameBoard-Rundenstatus', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('Noch dabei')
-    expect(wrapper.text()).toContain('Bestätigung offen')
-    expect(wrapper.text()).toContain('1. Platz')
-    expect(wrapper.text()).toContain('4. Platz · automatisch')
+    expect(wrapper.get('.board__progress').text()).toContain('Wartet auf Bestätigung')
+    expect(wrapper.findAll('.board__progress')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('1. Platz')
+    expect(wrapper.text()).not.toContain('4. Platz')
+    expect(wrapper.text()).not.toContain('automatisch')
+    expect(wrapper.get('.board__nameText').text()).toBe('Lena')
+    expect(wrapper.findAll('.board__nameText').map((name) => name.text())).toEqual([
+      'Lena',
+      'Tom',
+      'Mia',
+      'Noah',
+    ])
     expect(wrapper.findAll('.board__row.is-finished')).toHaveLength(2)
+  })
+
+  it('meldet den eigenen Erfolg an und zeigt einen bestätigten Platz nur kurz', async () => {
+    vi.useFakeTimers()
+    const active = entry({ isSelf: true, term: null })
+    const wrapper = mount(GameBoard, { props: { entries: [active] } })
+
+    await wrapper.get('.board__claim').trigger('click')
+    expect(wrapper.emitted('claim')).toHaveLength(1)
+
+    await wrapper.setProps({
+      entries: [{ ...active, roundState: 'finished', placement: 2 }],
+    })
+    expect(wrapper.get('.board__progress').text()).toContain('Platz 2 gesichert')
+
+    await vi.advanceTimersByTimeAsync(2400)
+    await nextTick()
+    expect(wrapper.get('.board__progress').text()).toContain('Geschafft')
   })
 
   it('hält aktive und wartende Begriffe zunächst verdeckt', () => {
@@ -178,7 +208,7 @@ describe('GameBoard-Rundenstatus', () => {
     expect(reopened.get('.board__termToggle').attributes('aria-pressed')).toBe('false')
   })
 
-  it('liefert für den eigenen Platz weiterhin nur den Platzhalter statt des Begriffs', () => {
+  it('liefert während der Spielansicht für den eigenen Platz nur den Platzhalter', () => {
     const wrapper = mount(GameBoard, {
       props: {
         entries: [
@@ -195,7 +225,9 @@ describe('GameBoard-Rundenstatus', () => {
     expect(wrapper.text()).toContain(WHO_AM_I.ownTermPlaceholder)
     expect(wrapper.text()).not.toContain('Taylor Swift')
     expect(wrapper.find('.board__termToggle').exists()).toBe(false)
-    expect(wrapper.get('.board__nameText').classes()).toBeTruthy()
+    expect(wrapper.get('.board__nameText').text()).toBe('Lena')
+    expect(wrapper.get('.board__selfTag').text()).toBe('Du')
+    expect(wrapper.text()).not.toContain('automatisch')
     expect(wrapper.get('.board__row').classes()).toContain('is-finished')
   })
 })

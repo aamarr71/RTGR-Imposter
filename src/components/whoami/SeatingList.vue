@@ -91,7 +91,11 @@ function onPointerUp() {
       :key="player.id"
       data-row
       class="seat"
-      :class="{ 'is-you': player.id === youId, 'is-dragging': dragIndex === index }"
+      :class="{
+        'is-you': player.id === youId,
+        'is-dragging': dragIndex === index,
+        'is-editable': canEdit,
+      }"
     >
       <button
         v-if="canEdit"
@@ -164,7 +168,7 @@ function onPointerUp() {
 .seat {
   display: grid;
   /* minmax(0, 1fr) für den Namen: sonst sprengt ein langer Name das Raster. */
-  grid-template-columns: auto 22px minmax(0, 1fr) auto auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-2);
   min-height: 52px;
@@ -176,6 +180,10 @@ function onPointerUp() {
     background-color var(--t-fast) var(--e-out),
     border-color var(--t-fast) var(--e-out),
     transform var(--t-base) var(--e-out);
+}
+
+.seat.is-editable {
+  grid-template-columns: auto 22px minmax(0, 1fr) auto auto;
 }
 
 .seat.is-you {

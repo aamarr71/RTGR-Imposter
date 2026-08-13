@@ -110,8 +110,9 @@ export interface RoomBoardEntry {
   online: boolean
   isSelf: boolean
   /**
-   * Der Begriff des Mitspielers. Für den eigenen Platz liefert der Server
-   * bewusst `null` – der echte Begriff verlässt niemals den Server.
+   * Der Begriff des Mitspielers. Für den eigenen Platz liefert der Server bis
+   * zum vollständigen Rundenabschluss bewusst `null`; danach wird das gesamte
+   * Podium inklusive des eigenen Begriffs aufgedeckt.
    */
   term: string | null
   roundState: RoomPlayerRoundState

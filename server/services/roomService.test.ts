@@ -547,6 +547,36 @@ describe('Platzierung innerhalb einer Runde', () => {
     ])
   })
 
+  it('deckt erst am vollständigen Rundenabschluss alle Podiumsbegriffe auf', async () => {
+    const { code, members } = await setupRoom(['Lena', 'Tom', 'Mia'])
+    await rooms.submitTerm(roomStore, code, members[0]!, 'FÜR_TOM')
+    await rooms.submitTerm(roomStore, code, members[1]!, 'FÜR_MIA')
+    await rooms.submitTerm(roomStore, code, members[2]!, 'FÜR_LENA')
+    await rooms.startRound(roomStore, code, members[0]!)
+
+    await rooms.requestPlacement(roomStore, code, members[0]!)
+    const partial = await rooms.approvePlacement(
+      roomStore,
+      code,
+      members[0]!,
+      members[0]!.playerId,
+    )
+    expect(partial.board?.find((entry) => entry.isSelf)?.term).toBeNull()
+
+    await rooms.requestPlacement(roomStore, code, members[1]!)
+    await rooms.approvePlacement(roomStore, code, members[0]!, members[1]!.playerId)
+
+    const finalViews = await Promise.all(
+      members.map((member) => rooms.readRoom(roomStore, code, member)),
+    )
+    for (const view of finalViews) {
+      expect(view.board?.every((entry) => entry.term !== null)).toBe(true)
+      expect(view.board?.map((entry) => entry.term).sort()).toEqual(
+        ['FÜR_LENA', 'FÜR_MIA', 'FÜR_TOM'].sort(),
+      )
+    }
+  })
+
   it('bildet das Sechs-Spieler-Beispiel mit automatisch vergebenem Platz 6 exakt ab', async () => {
     const { code, members } = await setupPlayingRoom(['A', 'B', 'C', 'D', 'E', 'F'])
     for (const member of members.slice(0, 5)) {

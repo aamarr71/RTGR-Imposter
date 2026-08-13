@@ -135,10 +135,12 @@ implementieren; Stores und Views bleiben unverändert.
 
 `buildView()` in `roomService.ts` ist die einzige Stelle, die eine Raumsicht
 erzeugt. Sie bekommt den Betrachter übergeben und setzt für dessen eigenen Platz
-`term: null`. Der eigene Begriff wird also nicht ausgeblendet, sondern gar nicht
-erst übertragen – auch nicht an den Host. Während der laufenden Runde wird
-zusätzlich der selbst vergebene Begriff nicht mehr ausgeliefert, damit sich der
-eigene nicht indirekt erschließen lässt.
+während des Ratens `term: null`. Der eigene Begriff wird also nicht nur
+ausgeblendet, sondern gar nicht erst übertragen – auch nicht an den Host.
+Zusätzlich wird der selbst vergebene Begriff während der Runde nicht
+ausgeliefert, damit sich der eigene nicht indirekt erschließen lässt. Sobald alle
+Plätze feststehen, liefert dieselbe Filterstelle alle Begriffe für den
+gemeinsamen Podiumsabschluss aus.
 
 Private Notizen werden nur für den anfragenden Spieler geladen und erhöhen die
 Raumversion nicht – sie lösen bei niemandem sonst ein Update aus.
